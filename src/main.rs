@@ -245,6 +245,16 @@ fn main() {
             Menu::None => {}
         }
         ui.end();
+        if win.events.iter().any(|e| matches!(e, platform::Event::KeyDown(platform::key::F2, false))) {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+            let dir = format!("{home}/.mcrust/screenshots");
+            let _ = std::fs::create_dir_all(&dir);
+            let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            let name = format!("{secs}.png");
+            if gl::screenshot(win.width, win.height).save_png(&format!("{dir}/{name}")).is_ok() {
+                game.message(&format!("Saved screenshot as {name}"));
+            }
+        }
         if quit {
             break;
         }

@@ -82,6 +82,7 @@ Command-line extras:
 | Drop item | Q |
 | Hotbar | 1–9 or scroll wheel |
 | Hide HUD / debug / camera view | F1 / F3 / F5 |
+| Screenshot (saved to `~/.mcrust/screenshots`) | F2 |
 | Fullscreen | F11 |
 | Pause | Esc |
 
