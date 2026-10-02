@@ -48,6 +48,35 @@ impl Ui {
         self.tex = 0;
     }
 
+    /// Re-bind the GUI shader state (after drawing 3D content inside a GUI).
+    pub fn rebind(&mut self, r: &Renderer) {
+        let s = &r.gui_shader;
+        s.bind();
+        let m = Mat4::ortho(0.0, r.width as f32 / self.scale, r.height as f32 / self.scale, 0.0, -100.0, 100.0);
+        s.set_mat4("u_mvp", &m.0);
+        unsafe {
+            gl::glDisable(gl::DEPTH_TEST);
+            gl::glDisable(gl::CULL_FACE);
+            gl::glEnable(gl::BLEND);
+            gl::glBlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+        }
+        self.tex = 0;
+    }
+
+    pub fn mark(&self) -> usize {
+        self.verts.len()
+    }
+
+    /// Apply a 2D transform to all vertices emitted since `mark` (used for the rotated splash).
+    pub fn transform_since(&mut self, mark: usize, f: impl Fn(f32, f32) -> (f32, f32)) {
+        let start = mark.min(self.verts.len());
+        for v in &mut self.verts[start..] {
+            let (x, y) = f(v.pos[0], v.pos[1]);
+            v.pos[0] = x;
+            v.pos[1] = y;
+        }
+    }
+
     pub fn flush(&mut self) {
         if self.verts.is_empty() {
             return;

@@ -130,8 +130,8 @@ impl Generator {
 
     /// Climate parameters for a column: (temperature, humidity) roughly in [-1,1].
     fn climate(&self, x: f64, z: f64) -> (f64, f64) {
-        let t = self.temp.fbm2(x / 700.0, z / 700.0) * 1.6 + self.detail.fbm2(x / 40.0, z / 40.0) * 0.03;
-        let h = self.humid.fbm2(x / 600.0 + 100.0, z / 600.0) * 1.6 + self.detail.fbm2(z / 40.0, x / 40.0) * 0.03;
+        let t = self.temp.fbm2(x / 1400.0, z / 1400.0) * 2.4 + self.detail.fbm2(x / 40.0, z / 40.0) * 0.03;
+        let h = self.humid.fbm2(x / 1100.0 + 100.0, z / 1100.0) * 2.4 + self.detail.fbm2(z / 40.0, x / 40.0) * 0.03;
         (t, h)
     }
 
@@ -161,10 +161,10 @@ impl Generator {
             h += (1.0 - m) * smoothstep(-0.2, 0.4, ero) * det.max(0.0) * 6.0;
         }
         // Rivers: carve channels where river noise crosses zero.
-        let rv = self.river.fbm2(fx / 380.0, fz / 380.0).abs();
+        let rv = self.river.fbm2(fx / 700.0, fz / 700.0).abs();
         let mut is_river = false;
-        if cont > -0.1 && rv < 0.035 {
-            let depth = 1.0 - rv / 0.035;
+        if cont > -0.05 && rv < 0.022 {
+            let depth = 1.0 - rv / 0.022;
             let target = sea - 3.0;
             if h > target {
                 h = h - (h - target) * smoothstep(0.0, 0.6, depth);
@@ -817,4 +817,41 @@ pub fn find_spawn(generator: &Generator) -> (i32, i32, i32) {
         }
     }
     (0, 100, 0)
+}
+
+/// Debug: render a top-down biome/height map to a PNG.
+pub fn debug_map(seed: u64, path: &str, size: usize, step: i32) {
+    let g = Generator::new(seed);
+    let mut img = crate::image::Image::new(size, size);
+    for py in 0..size {
+        for px in 0..size {
+            let x = (px as i32 - size as i32 / 2) * step;
+            let z = (py as i32 - size as i32 / 2) * step;
+            let c = g.column(x, z);
+            let base: u32 = match c.biome {
+                Biome::Ocean => 0x2040C0,
+                Biome::DeepOcean => 0x102080,
+                Biome::FrozenOcean => 0x8080E0,
+                Biome::River => 0x3060FF,
+                Biome::Beach => 0xE8DCA0,
+                Biome::SnowyBeach => 0xF0F0E0,
+                Biome::Plains => 0x8DB360,
+                Biome::Forest => 0x056621,
+                Biome::BirchForest => 0x307444,
+                Biome::Taiga => 0x0B6659,
+                Biome::SnowyTaiga => 0x31554A,
+                Biome::SnowyTundra => 0xFFFFFF,
+                Biome::Desert => 0xFA9418,
+                Biome::Savanna => 0xBDB25F,
+                Biome::Jungle => 0x537B09,
+                Biome::Swamp => 0x07F9B2,
+                Biome::Mountains => 0x606060,
+                Biome::SnowyMountains => 0xA0A0A0,
+            };
+            let shade = 0.7 + (c.height - SEA_LEVEL) as f32 / 120.0;
+            let f = |v: u32| ((v & 255) as f32 * shade).clamp(0.0, 255.0) as u8;
+            img.set(px, py, [f(base >> 16), f(base >> 8), f(base), 255]);
+        }
+    }
+    let _ = img.save_png(path);
 }
