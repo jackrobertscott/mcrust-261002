@@ -43,7 +43,11 @@ pub enum Action {
 }
 
 fn clicked(inp: &Input, hovered: bool) -> bool {
-    hovered && inp.click == Some(0)
+    let c = hovered && inp.click == Some(0);
+    if c {
+        crate::audio::UI_CLICK.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    c
 }
 
 /// Darkened background used behind in-game menus.

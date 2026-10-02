@@ -264,7 +264,7 @@ pub struct Game {
     pub panorama_angle: f32,
     pub held_name_timer: i32,
     pub loading_ticks: i32,
-    pub sounds: Vec<&'static str>,
+    pub sounds: Vec<SoundEvent>,
     pub splash: String,
     pub dragging_slider: Option<u8>,
     pub menu_return: Menu,
@@ -274,9 +274,18 @@ pub struct Game {
     pub selected_world: Option<usize>,
     pub settle_on_load: bool,
     pub confirm_delete: bool,
+    pub was_in_water: bool,
 }
 
 pub const TITLE_SEED: u64 = 0xC0FFEE;
+
+#[derive(Clone, Copy, Debug)]
+pub struct SoundEvent {
+    pub name: &'static str,
+    pub pos: Option<Vec3>,
+    pub volume: f32,
+    pub pitch: f32,
+}
 
 const SPLASHES: &[&str] = &[
     "Made in Rust!",
@@ -342,7 +351,16 @@ impl Game {
             selected_world: None,
             settle_on_load: true,
             confirm_delete: false,
+            was_in_water: false,
         }
+    }
+
+    pub fn sound(&mut self, name: &'static str, pos: Option<Vec3>, volume: f32) {
+        let pitch = 0.9 + self.rng.next_f32() * 0.2;
+        self.sounds.push(SoundEvent { name, pos, volume, pitch });
+    }
+    pub fn sound_at_block(&mut self, name: &'static str, x: i32, y: i32, z: i32, volume: f32) {
+        self.sound(name, Some(v3(x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5)), volume);
     }
 
     // ---------------- world lifecycle ----------------
@@ -619,7 +637,12 @@ impl Game {
         let from = self.player.body.pos;
         let sprinting = self.player.sprinting;
         let m = &mut self.mobs[i];
+        let mpos = m.body.pos;
+        let kind = m.kind;
         if m.hurt(dmg, from, &mut self.rng) {
+            let name = mob_sound(kind);
+            self.sounds.push(SoundEvent { name, pos: Some(mpos), volume: 0.8, pitch: 1.2 });
+            let m = &mut self.mobs[i];
             if sprinting {
                 let d = self.player.look_dir();
                 m.body.vel.x += d.x * 0.5;
@@ -869,7 +892,9 @@ impl Game {
         let dx = p.body.pos.x - p.prev_pos.x;
         let dz = p.body.pos.z - p.prev_pos.z;
         let dist = (dx * dx + dz * dz).sqrt();
+        let prev_step = p.walk_dist.floor();
         p.walk_dist += dist * 0.6;
+        let stepped = p.walk_dist.floor() > prev_step && p.body.on_ground && !p.sneaking;
         let target_bob = if p.body.on_ground { dist.min(0.1) } else { 0.0 };
         p.bob += (target_bob - p.bob) * 0.4;
         p.limb_amount += ((dist * 4.0).min(1.0) - p.limb_amount) * 0.4;
@@ -883,6 +908,23 @@ impl Game {
             p.body_yaw += diff * 0.3;
         }
 
+        // ---- footstep / landing / splash sounds ----
+        let feet = self.player.body.pos;
+        let (fx, fy, fz) = (feet - v3(0.0, 0.2, 0.0)).floor();
+        let below = self.world.get(fx, fy, fz);
+        if stepped && below != AIR && below != WATER {
+            self.sound(crate::audio::step_sound(below), Some(feet), 0.3);
+        }
+        if let Some(fd) = landed {
+            if fd > 1.0 && below != AIR {
+                self.sound(crate::audio::step_sound(below), Some(feet), 0.5);
+            }
+        }
+        let in_water = self.player.body.in_water;
+        if in_water && !self.was_in_water && self.player.body.vel.y < -0.1 {
+            self.sound("splash", Some(feet), 0.4);
+        }
+        self.was_in_water = in_water;
         // ---- fall damage ----
         if let Some(fd) = landed {
             let dmg = (fd - 3.0).ceil();
@@ -961,7 +1003,9 @@ impl Game {
             }
         }
         if picked {
-            self.sounds.push("pop");
+            let pitch = 1.4 + self.rng.next_f32() * 0.8;
+            let pos = Some(self.player.body.pos);
+            self.sounds.push(SoundEvent { name: "pop", pos, volume: 0.25, pitch });
         }
         self.items.retain(|i| i.stack.count > 0);
 
@@ -1035,7 +1079,8 @@ impl Game {
             p.body.vel.z = p.body.vel.z * 0.5 + d.z / l * 0.4;
             p.body.vel.y = 0.36;
         }
-        self.sounds.push("hurt");
+        self.sounds.push(SoundEvent { name: "hurt", pos: None, volume: 0.8, pitch: 1.0 });
+        let p = &mut self.player;
         if p.health <= 0.0 {
             p.health = 0.0;
             p.dead = true;
@@ -1227,7 +1272,7 @@ impl Game {
                 }
             }
         }
-        self.sounds.push("break");
+        self.sound_at_block(crate::audio::dig_sound(b), x, y, z, 1.0);
         // drops
         let harvest = !by_player || self.can_harvest(b);
         if harvest {
@@ -1409,7 +1454,7 @@ impl Game {
                 if !interact {
                     self.player.eating += 1;
                     if self.player.eating % 4 == 0 {
-                        self.sounds.push("eat");
+                        self.sound("eat", None, 0.5);
                         // food particles
                         let p = self.player.eye() + self.player.look_dir() * 0.5 - v3(0.0, 0.2, 0.0);
                         if let Some(_t) = item::texture(held.id) {
@@ -1428,7 +1473,7 @@ impl Game {
                         if held.id == item::ROTTEN_FLESH && self.rng.chance(0.8) {
                             self.player.saturation = 0.0;
                         }
-                        self.sounds.push("burp");
+                        self.sound("burp", None, 0.5);
                     }
                     return;
                 }
@@ -1504,7 +1549,7 @@ impl Game {
                 self.world.set_block(hit.x, hit.y, hit.z, FARMLAND, 0);
                 self.player.inv.damage_held(1);
                 self.player.start_swing();
-                self.sounds.push("till");
+                self.sound_at_block("till", hit.x, hit.y, hit.z, 1.0);
                 if tb == GRASS && self.rng.chance(0.1) {
                     let p = v3(hit.x as f32 + 0.5, hit.y as f32 + 1.1, hit.z as f32 + 0.5);
                     self.spawn_item(p, ItemStack::new(item::WHEAT_SEEDS, 1));
@@ -1642,7 +1687,7 @@ impl Game {
         }
         self.player.inv.consume_held(1);
         self.player.start_swing();
-        self.sounds.push("place");
+        self.sound_at_block(crate::audio::dig_sound(pb), px, py, pz, 0.9);
     }
 
     fn fluid_raycast(&self) -> Option<(i32, i32, i32)> {
@@ -1707,7 +1752,7 @@ impl Game {
                 if self.world.get(x + dx, y + dy, z + dz) == WATER {
                     let nb = if meta == 0 { OBSIDIAN } else { COBBLESTONE };
                     self.set_block_updated(x, y, z, nb, 0);
-                    self.sounds.push("fizz");
+                    self.sound_at_block("fizz", x, y, z, 0.5);
                     return;
                 }
             }
@@ -1932,12 +1977,23 @@ impl Game {
         let alive = !self.player.dead;
         let skydark = self.skydark();
         let peaceful = self.options.difficulty == Difficulty::Peaceful;
+        let mut amb = Vec::new();
         for m in self.mobs.iter_mut() {
             let (x, _, z) = m.body.pos.floor();
             if !self.world.is_loaded(x, z) {
                 continue;
             }
+            let fuse_before = m.fuse;
             m.tick(&self.world, ppos, alive && !peaceful, skydark, &mut self.rng, &mut events);
+            if m.alive() && self.rng.chance(1.0 / 240.0) {
+                amb.push((mob_sound(m.kind), m.body.pos));
+            }
+            if m.kind == MobKind::Creeper && fuse_before == 0 && m.fuse > 0 {
+                amb.push(("fuse", m.body.pos));
+            }
+        }
+        for (n, p) in amb {
+            self.sound(n, Some(p), 0.6);
         }
         // simple separation between mobs
         let n = self.mobs.len();
@@ -1969,7 +2025,7 @@ impl Game {
                 MobEvent::ShootArrow { from, dir } => {
                     let d = dir + v3(self.rng.uniform(-0.05, 0.05), self.rng.uniform(-0.05, 0.05), self.rng.uniform(-0.05, 0.05));
                     self.arrows.push(Arrow { pos: from, prev_pos: from, vel: d.norm() * 1.6, stuck: false, age: 0, from_player: false, damage: 3.0 });
-                    self.sounds.push("bow");
+                    self.sound("bow", Some(from), 0.8);
                 }
                 MobEvent::LayEgg { pos } => {
                     self.spawn_item(pos, ItemStack::new(item::EGG, 1));
@@ -2018,7 +2074,7 @@ impl Game {
     }
 
     pub fn explode(&mut self, pos: Vec3, power: f32) {
-        self.sounds.push("explode");
+        self.sound("explode", Some(pos), 1.0);
         self.screen_shake = 1.0;
         let r = power.ceil() as i32 + 1;
         let (cx, cy, cz) = pos.floor();
@@ -2254,5 +2310,18 @@ impl Game {
                 self.mobs.push(m);
             }
         }
+    }
+}
+
+pub fn mob_sound(k: MobKind) -> &'static str {
+    match k {
+        MobKind::Pig => "pig",
+        MobKind::Cow => "cow",
+        MobKind::Sheep => "sheep",
+        MobKind::Chicken => "chicken",
+        MobKind::Zombie => "zombie",
+        MobKind::Skeleton => "skeleton",
+        MobKind::Spider => "spider",
+        MobKind::Creeper => "mobhurt",
     }
 }

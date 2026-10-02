@@ -4,6 +4,7 @@
 //! library and macOS system frameworks.
 
 mod assets;
+mod audio;
 mod block;
 mod draw;
 mod entity;
@@ -53,6 +54,11 @@ fn main() {
     let mut scene = draw::Scene::new();
     let mut ui = ui::Ui::new();
     let mut game = Game::new();
+    let mut audio = audio::Audio::new();
+    if shot.is_some() {
+        audio.set_volume(0.0, 0.0);
+    }
+    audio.start_music_soon();
     if let Some(seed) = &autoplay {
         game.seed_text = seed.clone();
         game.start_new_world();
@@ -222,7 +228,16 @@ fn main() {
             }
         }
         win.swap();
-        game.sounds.clear();
+        // ---------------- audio ----------------
+        audio.listener = game.player.eye();
+        audio.listener_yaw = game.player.yaw;
+        for ev in game.sounds.drain(..) {
+            audio.play(ev.name, ev.pos, ev.volume, ev.pitch);
+        }
+        if audio::UI_CLICK.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            audio.play("click", None, 0.6, 1.0);
+        }
+        audio.update_music(dt, true);
     }
     game.options.save();
     game.save();
