@@ -744,6 +744,18 @@ impl Game {
             self.player.sleeping += 1;
             if self.player.sleeping >= 100 {
                 self.player.sleeping = 0;
+                // wake up beside the bed
+                let (bx, by, bz) = self.player.body.pos.floor();
+                'find: for r in 1..=2 {
+                    for (dx, dz) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)] {
+                        let (x, z) = (bx + dx * r, bz + dz * r);
+                        if !block::is_solid(self.world.get(x, by, z)) && !block::is_solid(self.world.get(x, by + 1, z)) && block::is_solid(self.world.get(x, by - 1, z)) {
+                            self.player.body.pos = v3(x as f32 + 0.5, by as f32, z as f32 + 0.5);
+                            self.player.prev_pos = self.player.body.pos;
+                            break 'find;
+                        }
+                    }
+                }
                 let day = self.world.time.div_euclid(24000) + 1;
                 self.world.time = day * 24000;
                 self.raining = false;

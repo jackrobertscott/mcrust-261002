@@ -68,6 +68,8 @@ pub const NAMES: &[&str] = &[
     "diamond_shovel",
     "diamond_sword",
     "diamond_hoe",
+    "oak_door",
+    "red_bed",
 ];
 
 type Grid = [&'static str; 16];
@@ -780,6 +782,44 @@ const PAPER: Grid = [
     "................",
 ];
 
+const OAK_DOOR: Grid = [
+    "................",
+    "....KKKKKKKK....",
+    "....KhlllllK....",
+    "....Kl..m..K....",
+    "....Kl..m..K....",
+    "....Kl..m..K....",
+    "....KlmmmmdK....",
+    "....KlmdmmdK....",
+    "....KlmdmmdK....",
+    "....KlmdmmiK....",
+    "....KlmdmmIK....",
+    "....KlmdmmdK....",
+    "....KlmdmmdK....",
+    "....KlmdmmdK....",
+    "....KlddddDK....",
+    "....KKKKKKKK....",
+];
+
+const RED_BED: Grid = [
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "......KKKKKKKKK.",
+    ".....KWWWHRRRRK.",
+    "....KWWwHRRRRdK.",
+    "...KwwgHRRRRddK.",
+    "..KgggrrrrrrddK.",
+    "..KgggSSSSSSddK.",
+    "..KbbbbbbbbbBBK.",
+    "..KbKKKKKKKbKbK.",
+    "..KKK.....KKKKK.",
+    "................",
+    "................",
+];
+
 pub fn get(name: &str) -> Option<Image> {
     if let Some((mat, kind)) = name.rsplit_once('_') {
         if let Some(img) = tool(mat, kind) {
@@ -1023,6 +1063,35 @@ pub fn get(name: &str) -> Option<Image> {
             )
         }
         "paper" => sprite(&PAPER, &[('K', 0x8F8F80), ('w', 0xF2F2E6), ('g', 0xC8C8B8)]),
+        "oak_door" => sprite(
+            &OAK_DOOR,
+            &[
+                ('K', 0x3A2A14),
+                ('D', 0x5E4729),
+                ('d', 0x7A5F38),
+                ('m', 0x9C7F4E),
+                ('l', 0xB8945F),
+                ('h', 0xC9A66E),
+                ('I', 0x2A2A2A),
+                ('i', 0x8A8A8A),
+            ],
+        ),
+        "red_bed" => sprite(
+            &RED_BED,
+            &[
+                ('K', 0x2A0A08),
+                ('W', 0xFFFFFF),
+                ('w', 0xE0E0E0),
+                ('g', 0xB8B8B8),
+                ('H', 0xD8524A),
+                ('R', 0xC23A33),
+                ('r', 0x9A221D),
+                ('S', 0x8A1C18),
+                ('d', 0x6A1410),
+                ('b', 0xAD8A55),
+                ('B', 0x7A5F38),
+            ],
+        ),
         _ => return None,
     };
     Some(img)

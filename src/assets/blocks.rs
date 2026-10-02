@@ -30,6 +30,9 @@ pub const NAMES: &[&str] = &[
     "destroy_stage_0", "destroy_stage_1", "destroy_stage_2", "destroy_stage_3",
     "destroy_stage_4", "destroy_stage_5", "destroy_stage_6", "destroy_stage_7",
     "destroy_stage_8", "destroy_stage_9",
+    "oak_door_top", "oak_door_bottom", "ladder",
+    "bed_head_top", "bed_foot_top", "bed_head_side", "bed_foot_side",
+    "bed_head_end", "bed_foot_end",
 ];
 
 pub fn get(name: &str) -> Option<Image> {
@@ -100,6 +103,15 @@ pub fn get(name: &str) -> Option<Image> {
         "tnt_side" => tnt_side(),
         "tnt_top" => tnt_end(true),
         "tnt_bottom" => tnt_end(false),
+        "oak_door_top" => oak_door_top(),
+        "oak_door_bottom" => oak_door_bottom(),
+        "ladder" => ladder(),
+        "bed_head_top" => bed_head_top(),
+        "bed_foot_top" => bed_foot_top(),
+        "bed_head_side" => bed_side(613),
+        "bed_foot_side" => bed_side(614),
+        "bed_head_end" => bed_head_end(),
+        "bed_foot_end" => bed_foot_end(),
         _ => {
             if let Some(s) = name.strip_prefix("wheat_stage") {
                 let s: u32 = s.parse().ok()?;
@@ -1888,4 +1900,254 @@ fn destroy(stage: usize) -> Image {
         img.put(x, y, [0x18, 0x18, 0x18, a]);
     }
     img
+}
+
+// ---------------------------------------------------------------------------
+// door / ladder / bed
+
+/// Oak planks rotated 90 degrees: vertical boards 4 px wide (door panels).
+fn vplanks(seed: u64) -> Image {
+    let p = wood_pal("oak").unwrap();
+    let h = planks(&p.planks, seed);
+    let mut img = Image::new(16, 16);
+    for y in 0..16 {
+        for x in 0..16 {
+            img.set(x, y, h.get(y, x));
+        }
+    }
+    img
+}
+
+/// Door palette: frame outline, dark frame, window shadow / highlight lips,
+/// iron hinge and handle, transparent window.
+const DOOR_PAL: [(char, C); 7] = [
+    ('D', rgb(0x4C3A21)),
+    ('d', rgb(0x7A5F38)),
+    ('s', rgb(0x5E4729)),
+    ('h', rgb(0xC4A06A)),
+    ('.', [0, 0, 0, 0]),
+    ('I', rgb(0x3A3A3A)),
+    ('i', rgb(0x8A8A8A)),
+];
+
+fn oak_door_top() -> Image {
+    let mut img = vplanks(601);
+    let rows = [
+        "DDDDDDDDDDDDDDDD",
+        "DddddddddddddddD",
+        "DdssssssssssssdD",
+        "Dds....hs....hdD",
+        "Dds....hs....hdD",
+        "Dds....hs....hdD",
+        "Dds....hs....hdD",
+        "DdhhhhhhhhhhhhdD",
+        "Dd____________dD",
+        "Dd____________dD",
+        "Dd____________dD",
+        "Dd____________dD",
+        "Dd____________dD",
+        "Ddi___________dD",
+        "DdI___________dD",
+        "Dd____________dD",
+    ];
+    paint(&mut img, &rows, &DOOR_PAL);
+    img
+}
+
+fn oak_door_bottom() -> Image {
+    let mut img = vplanks(602);
+    let rows = [
+        "Dd____________dD",
+        "Ddi___________dD",
+        "DdI_________iidD",
+        "Dd__________IIdD",
+        "Dd____________dD",
+        "Dd____________dD",
+        "DdssssssssssssdD",
+        "DdhhhhhhhhhhhhdD",
+        "Dd____________dD",
+        "Dd____________dD",
+        "Dd____________dD",
+        "Ddi___________dD",
+        "DdI___________dD",
+        "Dd____________dD",
+        "DddddddddddddddD",
+        "DDDDDDDDDDDDDDDD",
+    ];
+    paint(&mut img, &rows, &DOOR_PAL);
+    img
+}
+
+fn ladder() -> Image {
+    let rows = [
+        ".ln..........ln.",
+        ".lnHHlHHHHlHHln.",
+        ".lnKKKKKKKKKKln.",
+        ".ln..........lK.",
+        ".lK..........ln.",
+        ".lnHHHlHHHHHHln.",
+        ".lnKKKKKKKKKKln.",
+        ".mn..........ln.",
+        ".ln..........mn.",
+        ".lnHHHHHlHHHHln.",
+        ".lnKKKKKKKKKKln.",
+        ".ln..........ln.",
+        ".lK..........ln.",
+        ".lnHlHHHHHHlHln.",
+        ".lnKKKKKKKKKKln.",
+        ".ln..........lK.",
+    ];
+    grid(
+        &rows,
+        &[
+            ('H', rgb(0xB8945F)),
+            ('l', rgb(0xAD8A55)),
+            ('m', rgb(0x8C6E42)),
+            ('n', rgb(0x6A5230)),
+            ('K', rgb(0x3F3020)),
+        ],
+    )
+}
+
+const BED_RED: [(u32, u32); 4] = [(0x7E1A16, 1), (0x9A221D, 3), (0xAE2B25, 5), (0xC23A33, 2)];
+
+const BED_PAL: [(char, C); 12] = [
+    ('R', rgb(0xD0463E)), // blanket fold highlight
+    ('r', rgb(0x8E1F1A)), // blanket shade
+    ('k', rgb(0x5E1310)), // blanket hem / deep shadow
+    ('W', rgb(0xFFFFFF)),
+    ('w', rgb(0xE6E6E6)),
+    ('g', rgb(0xC4C4C4)),
+    ('G', rgb(0x9A9A9A)),
+    ('b', rgb(0xAD8A55)), // oak frame light
+    ('m', rgb(0x9C7F4E)),
+    ('n', rgb(0x8C6E42)),
+    ('D', rgb(0x6A5230)),
+    ('.', [0, 0, 0, 0]),
+];
+
+fn blanket(seed: u64) -> Image {
+    wquant(&noise(seed, 1, 0, 0.5), &BED_RED)
+}
+
+fn bed_head_top() -> Image {
+    let mut img = blanket(611);
+    let rows = [
+        "gwwwwwwwwwwwwwwg",
+        "gWWWWWWWWWWWWWwG",
+        "gWWWWWWWWWWWWwwG",
+        "gWWWWWwWWWWWWwwG",
+        "gwWWWWWWWWWWwwgG",
+        "gwwwwwwwwwwwwggG",
+        "ggggggggggggggGG",
+        "RRRRRRRRRRRRRRRR",
+        "rrrrrrrrrrrrrrrr",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+    ];
+    paint(&mut img, &rows, &BED_PAL);
+    img
+}
+
+fn bed_foot_top() -> Image {
+    let mut img = blanket(612);
+    let rows = [
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "r______________r",
+        "rrrrrrrrrrrrrrrr",
+        "RRRRRRRRRRRRRRRR",
+        "R______________R",
+        "rrrrrrrrrrrrrrrr",
+        "kkkkkkkkkkkkkkkk",
+    ];
+    paint(&mut img, &rows, &BED_PAL);
+    img
+}
+
+/// Side / end view: 9 px of content in rows 7..15, transparent above.
+/// `band` overlays the 5 blanket rows (7..11), `wood` the 4 frame rows (12..15).
+fn bed_profile(seed: u64, band: &[&str; 5], wood: &[&str; 4]) -> Image {
+    let b = blanket(seed);
+    let p = wood_pal("oak").unwrap();
+    let w = planks(&p.planks, seed + 1);
+    let mut img = Image::new(16, 16);
+    for y in 7..12 {
+        for x in 0..16 {
+            img.set(x, y, b.get(x, y));
+        }
+    }
+    for y in 12..16 {
+        for x in 0..16 {
+            // rows 4..6 are one board's grain, without its seam row
+            img.set(x, y, w.get(x, (y - 12) % 3 + 4));
+        }
+    }
+    let mut rows = vec!["................"; 7];
+    rows.extend_from_slice(band);
+    rows.extend_from_slice(wood);
+    paint(&mut img, &rows, &BED_PAL);
+    img
+}
+
+const BED_WOOD: [&str; 4] = [
+    "DDDDDDDDDDDDDDDD",
+    "Db____________bD",
+    "Dm____________nD",
+    "DDDDDDDDDDDDDDDD",
+];
+
+fn bed_side(seed: u64) -> Image {
+    bed_profile(
+        seed,
+        &[
+            "RRRRRRRRRRRRRRRR",
+            "________________",
+            "________________",
+            "rrrrrrrrrrrrrrrr",
+            "kkkkkkkkkkkkkkkk",
+        ],
+        &BED_WOOD,
+    )
+}
+
+fn bed_head_end() -> Image {
+    bed_profile(
+        615,
+        &[
+            "RRgwwwwwwwwwwgRR",
+            "__gWWWWWWWWWwg__",
+            "_rgwwwwwwwwwwgr_",
+            "rrGggggggggggGrr",
+            "kkkkkkkkkkkkkkkk",
+        ],
+        &BED_WOOD,
+    )
+}
+
+fn bed_foot_end() -> Image {
+    bed_profile(
+        616,
+        &[
+            "RRRRRRRRRRRRRRRR",
+            "R______________R",
+            "rrrrrrrrrrrrrrrr",
+            "r______________r",
+            "kkkkkkkkkkkkkkkk",
+        ],
+        &BED_WOOD,
+    )
 }
