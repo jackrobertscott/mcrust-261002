@@ -804,8 +804,9 @@ impl Scene {
         let eat = if p.eating > 0 { (p.eating as f32 + alpha) / 32.0 } else { 0.0 };
         if held.is_empty() {
             // Steve's right arm, pointing from the lower right towards the centre
-            let hand = v3(0.5 - 0.35 * (sq * pi).sin(), -0.36 + 0.25 * (sq * pi * 2.0).sin() - equip * 0.6, -0.78 - 0.25 * (swing * pi).sin());
-            let dir = v3(-0.28 + 0.2 * (sq * pi).sin(), 0.45 + 0.3 * (sq * pi).sin(), -0.87).norm();
+            let ap = [0.52, -0.27, -0.86, -0.45, 0.7, -0.55];
+            let hand = v3(ap[0] - 0.35 * (sq * pi).sin(), ap[1] + 0.25 * (sq * pi * 2.0).sin() - equip * 0.6, ap[2] - 0.25 * (swing * pi).sin());
+            let dir = v3(ap[3] + 0.2 * (sq * pi).sin(), ap[4] + 0.3 * (sq * pi).sin(), ap[5]).norm();
             let side = dir.cross(v3(0.0, 1.0, 0.0)).norm();
             let zb = side.cross(dir).norm();
             // model y (down the arm) -> dir; model x -> side; model z -> zb

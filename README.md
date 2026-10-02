@@ -37,6 +37,7 @@ Command-line extras:
     lit furnaces).
   - Day/night cycle with sun, moon, stars and sunrise/sunset colours.
   - 3D clouds and biome-tinted grass and leaves.
+  - Weather: rain, and snow in cold biomes, which darkens the sky and has its own sound.
   - Translucent water that flows and slopes.
 - **Survival:**
   - Health, hunger and saturation, plus fall, drowning, lava and cactus damage.

@@ -2494,3 +2494,60 @@ pub fn mob_sound(k: MobKind) -> &'static str {
         MobKind::Creeper => "mobhurt",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn game_with(item: u16) -> Game {
+        let mut g = Game::new();
+        g.player.inv.slots[0] = ItemStack::new(item, 1);
+        g.player.inv.selected = 0;
+        g.player.body.on_ground = true;
+        g
+    }
+
+    #[test]
+    fn harvest_levels() {
+        let g = game_with(0);
+        assert!(g.can_harvest(DIRT));
+        assert!(!g.can_harvest(STONE));
+        let g = game_with(item::WOODEN_PICKAXE);
+        assert!(g.can_harvest(STONE));
+        assert!(g.can_harvest(COAL_ORE));
+        assert!(!g.can_harvest(IRON_ORE));
+        let g = game_with(item::STONE_PICKAXE);
+        assert!(g.can_harvest(IRON_ORE));
+        assert!(!g.can_harvest(DIAMOND_ORE));
+        let g = game_with(item::IRON_PICKAXE);
+        assert!(g.can_harvest(DIAMOND_ORE));
+        assert!(g.can_harvest(GOLD_ORE));
+        assert!(!g.can_harvest(OBSIDIAN));
+        let g = game_with(item::DIAMOND_PICKAXE);
+        assert!(g.can_harvest(OBSIDIAN));
+    }
+
+    #[test]
+    fn break_times_match_vanilla() {
+        // ticks to break = 1 / speed
+        let ticks = |item: u16, b: u8| (1.0 / game_with(item).break_speed(b)).ceil() as i32;
+        assert_eq!(ticks(0, DIRT), 15); // 0.75 s by hand
+        assert_eq!(ticks(0, OAK_LOG), 60); // 3 s by hand
+        assert_eq!(ticks(item::WOODEN_PICKAXE, STONE), 23); // ~1.15 s
+        assert_eq!(ticks(item::STONE_PICKAXE, STONE), 12);
+        assert!(ticks(0, STONE) > 100); // 7.5 s without a pickaxe
+        assert_eq!(ticks(item::DIAMOND_SHOVEL, DIRT), 2);
+    }
+
+    #[test]
+    fn drops() {
+        let mut g = game_with(0);
+        assert_eq!(g.block_drops(STONE, 0)[0].id, COBBLESTONE as u16);
+        assert_eq!(g.block_drops(GRASS, 0)[0].id, DIRT as u16);
+        assert_eq!(g.block_drops(COAL_ORE, 0)[0].id, item::COAL);
+        assert_eq!(g.block_drops(DIAMOND_ORE, 0)[0].id, item::DIAMOND);
+        let ripe = g.block_drops(WHEAT, 7);
+        assert!(ripe.iter().any(|s| s.id == item::WHEAT));
+        assert_eq!(g.block_drops(WHEAT, 3)[0].id, item::WHEAT_SEEDS);
+    }
+}
