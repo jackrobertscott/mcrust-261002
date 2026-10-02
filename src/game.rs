@@ -277,6 +277,7 @@ pub struct Game {
     pub settle_on_load: bool,
     pub confirm_delete: bool,
     pub was_in_water: bool,
+    pub scroll_acc: f32,
 }
 
 pub const TITLE_SEED: u64 = 59;
@@ -358,6 +359,7 @@ impl Game {
             settle_on_load: true,
             confirm_delete: false,
             was_in_water: false,
+            scroll_acc: 0.0,
         }
     }
 
@@ -516,10 +518,16 @@ impl Game {
                     }
                 }
                 Event::Scroll(d) => {
-                    if d.abs() > 0.0 {
+                    // accumulate (trackpads send many small deltas)
+                    if d.signum() != self.scroll_acc.signum() {
+                        self.scroll_acc = 0.0;
+                    }
+                    self.scroll_acc += d;
+                    while self.scroll_acc.abs() >= 1.0 {
                         let s = self.player.inv.selected as i32;
-                        let n = if d > 0.0 { s - 1 } else { s + 1 };
+                        let n = if self.scroll_acc > 0.0 { s - 1 } else { s + 1 };
                         self.select_slot(n.rem_euclid(9) as usize);
+                        self.scroll_acc -= self.scroll_acc.signum();
                     }
                 }
                 Event::MouseDown(0) => {

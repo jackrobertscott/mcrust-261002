@@ -386,7 +386,7 @@ impl Window {
                 22 => {
                     let dy = msg!(f64; ev, "scrollingDeltaY");
                     let precise = msg!(bool; ev, "hasPreciseScrollingDeltas");
-                    let d = if precise { dy / 10.0 } else { dy };
+                    let d = if precise { dy / 12.0 } else { dy.signum() * dy.abs().max(1.0) };
                     if d != 0.0 {
                         self.events.push(Event::Scroll(d as f32));
                     }
