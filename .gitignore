@@ -3,3 +3,4 @@
 /preview*
 *.png
 /.claude
+!docs/screenshots/*.png
