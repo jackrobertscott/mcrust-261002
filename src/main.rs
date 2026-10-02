@@ -19,6 +19,7 @@ mod noise;
 mod physics;
 mod platform;
 mod render;
+mod save;
 mod screens;
 mod ui;
 mod world;
@@ -155,22 +156,25 @@ fn main() {
             load_progress = ready as f32 / total as f32;
             game.loading_ticks += 1;
             if ready == total && game.loading_ticks > 10 {
-                // settle the player on the surface
-                let (x, _, z) = game.player.body.pos.floor();
-                let mut y = game.world.surface_height(x, z).max(1);
+                // settle the player on the surface (new worlds) or just out of any blocks (loaded)
+                let (x, py, z) = game.player.body.pos.floor();
+                let mut y = if game.settle_on_load { game.world.surface_height(x, z).max(1) } else { py.max(1) };
                 while y < world::CHUNK_H as i32 - 2 && (block::is_solid(game.world.get(x, y, z)) || block::is_solid(game.world.get(x, y + 1, z))) {
                     y += 1;
                 }
                 game.player.body.pos.y = y as f32;
                 game.player.prev_pos = game.player.body.pos;
-                game.player.spawn = game.player.body.pos;
+                if game.settle_on_load {
+                    game.player.spawn = game.player.body.pos;
+                }
                 game.menu = Menu::None;
+                game.save();
             }
         }
 
         // ---------------- render ----------------
         let input = screens::Input::from_window(&win);
-        let world_visible = !matches!(game.menu, Menu::Loading | Menu::CreateWorld) && !(!game.in_world && matches!(game.menu, Menu::Options | Menu::Controls));
+        let world_visible = !matches!(game.menu, Menu::Loading | Menu::CreateWorld | Menu::SelectWorld) && !(!game.in_world && matches!(game.menu, Menu::Options | Menu::Controls));
         if world_visible {
             scene.draw_world(&game, &mut r, alpha, !game.in_world);
         } else {
@@ -191,6 +195,7 @@ fn main() {
                     quit = true;
                 }
             }
+            Menu::SelectWorld => screens::select_world(&mut game, &r, &mut ui, &input),
             Menu::CreateWorld => screens::create_world(&mut game, &r, &mut ui, &input, elapsed),
             Menu::Options => {
                 let iw = game.in_world;
@@ -220,6 +225,7 @@ fn main() {
         game.sounds.clear();
     }
     game.options.save();
+    game.save();
 }
 
 /// Tiny scripted-input driver for automated testing: "t:action;t:action".
@@ -245,6 +251,7 @@ fn run_script(g: &mut Game, win: &mut Window, script: &str, t: f32) {
                     Some("options") => Menu::Options,
                     Some("create") => Menu::CreateWorld,
                     Some("death") => Menu::Death,
+                    Some("chest") => Menu::Chest,
                     _ => Menu::None,
                 }
             }
@@ -291,6 +298,36 @@ fn run_script(g: &mut Game, win: &mut Window, script: &str, t: f32) {
                     g.player.body.pos = v3(v[0], v[1], v[2]);
                     g.player.prev_pos = g.player.body.pos;
                 }
+            }
+            Some("craft3") => {
+                let i: usize = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+                let id: u16 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+                g.craft3[i % 9] = item::ItemStack::new(id, 1);
+            }
+            Some("furnace") => {
+                let (x, y, z) = g.player.body.pos.floor();
+                g.open_pos = (x, y - 1, z);
+                let mut f = inventory::FurnaceState::new();
+                f.input = item::ItemStack::new(block::IRON_ORE as u16, 5);
+                f.fuel = item::ItemStack::new(item::COAL, 3);
+                g.world.block_entities.insert(g.open_pos, world::BlockEntity::Furnace(f));
+            }
+            Some("chest") => {
+                let (x, y, z) = g.player.body.pos.floor();
+                g.open_pos = (x, y - 1, z);
+                let mut v = vec![item::ItemStack::EMPTY; 27];
+                v[0] = item::ItemStack::new(item::DIAMOND, 5);
+                v[13] = item::ItemStack::new(item::APPLE, 2);
+                g.world.block_entities.insert(g.open_pos, world::BlockEntity::Chest(v));
+            }
+            Some("load") => {
+                let f = parts.next().unwrap_or("").to_string();
+                g.open_saved_world(&f);
+            }
+            Some("select") => {
+                g.world_list = save::list_worlds();
+                g.selected_world = Some(0);
+                g.menu = Menu::SelectWorld;
             }
             Some("slot") => g.player.inv.selected = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0),
             Some("hurt") => g.damage_player(parts.next().and_then(|s| s.parse().ok()).unwrap_or(1.0), None),

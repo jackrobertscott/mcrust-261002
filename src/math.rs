@@ -146,6 +146,10 @@ impl Mat4 {
         m.0[5] = c;
         m
     }
+    /// Matrix with the given basis vectors as columns (and translation t).
+    pub fn from_basis(x: Vec3, y: Vec3, z: Vec3, t: Vec3) -> Mat4 {
+        Mat4([x.x, x.y, x.z, 0.0, y.x, y.y, y.z, 0.0, z.x, z.y, z.z, 0.0, t.x, t.y, t.z, 1.0])
+    }
     pub fn transform(&self, p: Vec3) -> Vec3 {
         let m = &self.0;
         v3(

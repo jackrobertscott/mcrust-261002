@@ -29,6 +29,7 @@ pub enum Menu {
     Furnace,
     Chest,
     Loading,
+    SelectWorld,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -268,7 +269,14 @@ pub struct Game {
     pub dragging_slider: Option<u8>,
     pub menu_return: Menu,
     pub screen_shake: f32,
+    pub world_folder: String,
+    pub world_list: Vec<crate::save::WorldInfo>,
+    pub selected_world: Option<usize>,
+    pub settle_on_load: bool,
+    pub confirm_delete: bool,
 }
+
+pub const TITLE_SEED: u64 = 0xC0FFEE;
 
 const SPLASHES: &[&str] = &[
     "Made in Rust!",
@@ -290,8 +298,7 @@ const SPLASHES: &[&str] = &[
 
 impl Game {
     pub fn new() -> Game {
-        let seed = 0xC0FFEE_u64;
-        let world = World::new(seed);
+        let world = World::new(TITLE_SEED);
         let mut rng = Random::new(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1));
         let splash = SPLASHES[rng.range(SPLASHES.len() as i32) as usize].to_string();
         let (sx, sy, sz) = crate::worldgen::find_spawn(&world.generator);
@@ -330,6 +337,11 @@ impl Game {
             dragging_slider: None,
             menu_return: Menu::Title,
             screen_shake: 0.0,
+            world_folder: String::new(),
+            world_list: Vec::new(),
+            selected_world: None,
+            settle_on_load: true,
+            confirm_delete: false,
         }
     }
 
@@ -348,11 +360,21 @@ impl Game {
             }
             h as i64 as u64
         };
-        self.world = World::new(seed);
+        self.reset_world(World::new(seed));
         self.world_name = if self.name_text.trim().is_empty() { "New World".into() } else { self.name_text.trim().to_string() };
+        self.world_folder = crate::save::folder_name(&self.world_name);
         let (sx, sy, sz) = crate::worldgen::find_spawn(&self.world.generator);
         self.player = Player::new(v3(sx as f32 + 0.5, sy as f32 + 0.5, sz as f32 + 0.5));
         self.player.yaw = self.rng.uniform(0.0, 360.0);
+        self.settle_on_load = true;
+        self.in_world = true;
+        self.menu = Menu::Loading;
+        self.loading_ticks = 0;
+    }
+
+    /// Replace the world and clear all transient state.
+    pub fn reset_world(&mut self, w: World) {
+        self.world = w;
         self.mobs.clear();
         self.items.clear();
         self.falling.clear();
@@ -362,21 +384,35 @@ impl Game {
         self.fluid_set.clear();
         self.spawned_chunks.clear();
         self.craft3 = [ItemStack::EMPTY; 9];
-        self.in_world = true;
-        self.menu = Menu::Loading;
-        self.loading_ticks = 0;
+        self.target = Target::None;
+    }
+
+    pub fn open_saved_world(&mut self, folder: &str) -> bool {
+        if crate::save::load_game(self, folder) {
+            self.in_world = true;
+            self.settle_on_load = false;
+            self.menu = Menu::Loading;
+            self.loading_ticks = 0;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn save(&self) {
+        if self.in_world {
+            if let Err(e) = crate::save::save_game(self) {
+                eprintln!("failed to save world: {e}");
+            }
+        }
     }
 
     pub fn quit_to_title(&mut self) {
+        self.close_container_silent();
+        self.save();
         self.in_world = false;
-        let seed = 0xC0FFEE_u64;
-        self.world = World::new(seed);
-        self.mobs.clear();
-        self.items.clear();
-        self.falling.clear();
-        self.arrows.clear();
-        self.particles.clear();
-        self.spawned_chunks.clear();
+        let seed = TITLE_SEED;
+        self.reset_world(World::new(seed));
         self.menu = Menu::Title;
         let (sx, sy, sz) = crate::worldgen::find_spawn(&self.world.generator);
         self.player = Player::new(v3(sx as f32 + 0.5, sy as f32 + 2.0, sz as f32 + 0.5));
@@ -613,6 +649,9 @@ impl Game {
             return;
         }
         self.world.time += 1;
+        if self.tick_count % 6000 == 0 {
+            self.save();
+        }
         if self.held_name_timer > 0 {
             self.held_name_timer -= 1;
         }

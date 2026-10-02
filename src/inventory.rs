@@ -318,3 +318,78 @@ pub fn craft(grid: &[ItemStack], w: usize, h: usize) -> Option<ItemStack> {
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::block::*;
+
+    fn grid(ids: &[u16]) -> Vec<ItemStack> {
+        ids.iter().map(|&i| if i == 0 { ItemStack::EMPTY } else { ItemStack::new(i, 1) }).collect()
+    }
+    const P: u16 = OAK_PLANKS as u16;
+    const S: u16 = item::STICK;
+    const C: u16 = COBBLESTONE as u16;
+
+    #[test]
+    fn planks_from_log_any_position() {
+        let g = grid(&[0, 0, 0, OAK_LOG as u16]);
+        assert_eq!(craft(&g, 2, 2), Some(ItemStack::new(P, 4)));
+        let g = grid(&[0, 0, 0, 0, BIRCH_LOG as u16, 0, 0, 0, 0]);
+        assert_eq!(craft(&g, 3, 3), Some(ItemStack::new(BIRCH_PLANKS as u16, 4)));
+    }
+
+    #[test]
+    fn sticks_table_torches() {
+        assert_eq!(craft(&grid(&[P, 0, P, 0]), 2, 2), Some(ItemStack::new(S, 4)));
+        assert_eq!(craft(&grid(&[P, P, P, P]), 2, 2), Some(ItemStack::new(CRAFTING_TABLE as u16, 1)));
+        assert_eq!(craft(&grid(&[0, item::COAL, 0, S]), 2, 2), Some(ItemStack::new(TORCH as u16, 4)));
+        assert_eq!(craft(&grid(&[item::CHARCOAL, 0, S, 0]), 2, 2), Some(ItemStack::new(TORCH as u16, 4)));
+    }
+
+    #[test]
+    fn tools() {
+        assert_eq!(craft(&grid(&[P, P, P, 0, S, 0, 0, S, 0]), 3, 3).unwrap().id, item::WOODEN_PICKAXE);
+        assert_eq!(craft(&grid(&[C, C, C, 0, S, 0, 0, S, 0]), 3, 3).unwrap().id, item::STONE_PICKAXE);
+        assert_eq!(craft(&grid(&[item::DIAMOND, item::DIAMOND, item::DIAMOND, 0, S, 0, 0, S, 0]), 3, 3).unwrap().id, item::DIAMOND_PICKAXE);
+        // axe and mirrored axe
+        assert_eq!(craft(&grid(&[P, P, 0, P, S, 0, 0, S, 0]), 3, 3).unwrap().id, item::WOODEN_AXE);
+        assert_eq!(craft(&grid(&[0, P, P, 0, S, P, 0, S, 0]), 3, 3).unwrap().id, item::WOODEN_AXE);
+        assert_eq!(craft(&grid(&[0, C, 0, 0, S, 0, 0, S, 0]), 3, 3).unwrap().id, item::STONE_SHOVEL);
+        assert_eq!(craft(&grid(&[0, item::IRON_INGOT, 0, 0, item::IRON_INGOT, 0, 0, S, 0]), 3, 3).unwrap().id, item::IRON_SWORD);
+        assert_eq!(craft(&grid(&[item::GOLD_INGOT, item::GOLD_INGOT, 0, 0, S, 0, 0, S, 0]), 3, 3).unwrap().id, item::GOLDEN_HOE);
+        // shovel fits in the 2x2 grid? (no: needs 3 rows)
+        assert_eq!(craft(&grid(&[P, 0, S, 0]), 2, 2), None);
+    }
+
+    #[test]
+    fn furnace_and_bread() {
+        assert_eq!(craft(&grid(&[C, C, C, C, 0, C, C, C, C]), 3, 3).unwrap().id, FURNACE as u16);
+        assert_eq!(craft(&grid(&[0, 0, 0, item::WHEAT, item::WHEAT, item::WHEAT, 0, 0, 0]), 3, 3).unwrap().id, item::BREAD);
+        assert_eq!(craft(&grid(&[P, P, P, P, 0, P, P, P, P]), 3, 3).unwrap().id, CHEST as u16);
+    }
+
+    #[test]
+    fn smelting() {
+        let mut f = FurnaceState::new();
+        f.input = ItemStack::new(IRON_ORE as u16, 2);
+        f.fuel = ItemStack::new(item::COAL, 1);
+        for _ in 0..COOK_TOTAL * 2 + 5 {
+            f.tick();
+        }
+        assert_eq!(f.output, ItemStack::new(item::IRON_INGOT, 2));
+        assert!(f.input.is_empty());
+        assert!(f.fuel.is_empty());
+    }
+
+    #[test]
+    fn inventory_add_stacks() {
+        let mut inv = Inventory::new();
+        assert_eq!(inv.add(ItemStack::new(C, 64)), 0);
+        assert_eq!(inv.add(ItemStack::new(C, 10)), 0);
+        assert_eq!(inv.slots[0].count, 64);
+        assert_eq!(inv.slots[1].count, 10);
+        assert_eq!(inv.add(ItemStack::new(item::WOODEN_PICKAXE, 1)), 0);
+        assert_eq!(inv.slots[2].id, item::WOODEN_PICKAXE);
+    }
+}

@@ -85,10 +85,14 @@ pub fn title(g: &mut Game, r: &Renderer, ui: &mut Ui, inp: &Input, time: f32) ->
     let bx = w / 2.0 - 100.0;
     let mut act = Action::None;
     if clicked(inp, ui.button(r, "Singleplayer", bx, y0, 200.0, 20.0, true)) {
-        g.name_text = "New World".into();
-        g.seed_text.clear();
-        g.focused_field = 0;
-        g.menu = Menu::CreateWorld;
+        g.world_list = crate::save::list_worlds();
+        g.selected_world = if g.world_list.is_empty() { None } else { Some(0) };
+        g.confirm_delete = false;
+        if g.world_list.is_empty() {
+            open_create(g);
+        } else {
+            g.menu = Menu::SelectWorld;
+        }
     }
     ui.button(r, "Multiplayer", bx, y0 + 24.0, 200.0, 20.0, false);
     ui.button(r, "Minecraft Realms", bx, y0 + 48.0, 200.0, 20.0, false);
@@ -104,6 +108,125 @@ pub fn title(g: &mut Game, r: &Renderer, ui: &mut Ui, inp: &Input, time: f32) ->
     let cw = ui.text_width(r, c);
     ui.text(r, c, w - cw - 2.0, h - 10.0, WHITE);
     act
+}
+
+fn open_create(g: &mut Game) {
+    g.name_text = "New World".into();
+    g.seed_text.clear();
+    g.focused_field = 0;
+    g.menu = Menu::CreateWorld;
+}
+
+// ---------------- Select world ----------------
+
+#[repr(C)]
+struct Tm {
+    sec: i32,
+    min: i32,
+    hour: i32,
+    mday: i32,
+    mon: i32,
+    year: i32,
+    wday: i32,
+    yday: i32,
+    isdst: i32,
+    gmtoff: i64,
+    zone: *const u8,
+}
+unsafe extern "C" {
+    fn localtime_r(t: *const i64, out: *mut Tm) -> *mut Tm;
+}
+
+fn format_date(secs: u64) -> String {
+    // local time via libc (part of the OS, not a crate)
+    let t = secs as i64;
+    let mut tm = Tm { sec: 0, min: 0, hour: 0, mday: 0, mon: 0, year: 0, wday: 0, yday: 0, isdst: 0, gmtoff: 0, zone: std::ptr::null() };
+    if !unsafe { localtime_r(&t, &mut tm) }.is_null() {
+        return format!("{:02}/{:02}/{:02} {:02}:{:02}", tm.mon + 1, tm.mday, tm.year % 100, tm.hour, tm.min);
+    }
+    // civil-from-days (UTC) fallback
+    let days = (secs / 86400) as i64;
+    let rem = secs % 86400;
+    let z = days + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{:02}/{:02}/{:02} {:02}:{:02}", m, d, y % 100, rem / 3600, (rem / 60) % 60)
+}
+
+pub fn select_world(g: &mut Game, r: &Renderer, ui: &mut Ui, inp: &Input) {
+    ui.dirt_background(r, 64);
+    let (w, h) = (ui.w, ui.h);
+    // list area darker, like vanilla
+    ui.rect(r, 0.0, 32.0, w, h - 96.0, [0, 0, 0, 160]);
+    ui.gradient(r, 0.0, 32.0, w, 4.0, [0, 0, 0, 255], [0, 0, 0, 0]);
+    ui.gradient(r, 0.0, h - 68.0, w, 4.0, [0, 0, 0, 0], [0, 0, 0, 255]);
+    ui.text_centered(r, "Select World", w / 2.0, 16.0, WHITE);
+    let lx = w / 2.0 - 110.0;
+    let mut y = 36.0;
+    let list: Vec<(String, String, String)> = g
+        .world_list
+        .iter()
+        .map(|i| (i.name.clone(), format!("{} ({})", i.folder, format_date(i.last_played)), format!("Survival Mode, Day {}", i.time / 24000)))
+        .collect();
+    for (k, (name, l2, l3)) in list.iter().enumerate() {
+        if y > h - 104.0 {
+            break;
+        }
+        let sel = g.selected_world == Some(k);
+        if sel {
+            ui.rect(r, lx - 2.0, y - 2.0, 220.0, 36.0, [128, 128, 128, 255]);
+            ui.rect(r, lx - 1.0, y - 1.0, 218.0, 34.0, [0, 0, 0, 255]);
+        }
+        // world icon placeholder: grass block
+        ui.block_icon(r, crate::block::GRASS, lx + 4.0, y + 8.0);
+        ui.text(r, name, lx + 28.0, y + 1.0, WHITE);
+        ui.text(r, l2, lx + 28.0, y + 12.0, [128, 128, 128, 255]);
+        ui.text(r, l3, lx + 28.0, y + 22.0, [128, 128, 128, 255]);
+        if inp.click == Some(0) && ui.hit(lx - 2.0, y - 2.0, 220.0, 36.0) {
+            if g.selected_world == Some(k) {
+                // double-click style: second click plays
+                let folder = g.world_list[k].folder.clone();
+                g.open_saved_world(&folder);
+                return;
+            }
+            g.selected_world = Some(k);
+            g.confirm_delete = false;
+        }
+        y += 36.0;
+    }
+    let has = g.selected_world.is_some();
+    let by = h - 52.0;
+    if clicked(inp, ui.button(r, "Play Selected World", w / 2.0 - 154.0, by, 150.0, 20.0, has)) && has {
+        let folder = g.world_list[g.selected_world.unwrap()].folder.clone();
+        g.open_saved_world(&folder);
+        return;
+    }
+    if clicked(inp, ui.button(r, "Create New World", w / 2.0 + 4.0, by, 150.0, 20.0, true)) {
+        open_create(g);
+        return;
+    }
+    let del_label = if g.confirm_delete { "Click again to delete" } else { "Delete" };
+    if clicked(inp, ui.button(r, del_label, w / 2.0 - 154.0, by + 24.0, 150.0, 20.0, has)) && has {
+        if g.confirm_delete {
+            let i = g.selected_world.unwrap();
+            crate::save::delete_world(&g.world_list[i].folder);
+            g.world_list = crate::save::list_worlds();
+            g.selected_world = if g.world_list.is_empty() { None } else { Some(0) };
+            g.confirm_delete = false;
+        } else {
+            g.confirm_delete = true;
+        }
+    }
+    if clicked(inp, ui.button(r, "Cancel", w / 2.0 + 4.0, by + 24.0, 150.0, 20.0, true)) || inp.key_pressed(key::ESCAPE) {
+        g.menu = Menu::Title;
+    }
 }
 
 // ---------------- Create world ----------------
@@ -162,7 +285,8 @@ pub fn create_world(g: &mut Game, r: &Renderer, ui: &mut Ui, inp: &Input, time: 
         g.start_new_world();
     }
     if clicked(inp, ui.button(r, "Cancel", w / 2.0 + 5.0, h - 28.0, 150.0, 20.0, true)) || inp.key_pressed(key::ESCAPE) {
-        g.menu = Menu::Title;
+        g.world_list = crate::save::list_worlds();
+        g.menu = if g.world_list.is_empty() { Menu::Title } else { Menu::SelectWorld };
     }
 }
 

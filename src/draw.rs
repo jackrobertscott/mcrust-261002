@@ -692,21 +692,16 @@ impl Scene {
         // eating animation
         let eat = if p.eating > 0 { (p.eating as f32 + alpha) / 32.0 } else { 0.0 };
         if held.is_empty() {
-            // Steve's right arm
-            let m = base
-                * Mat4::translate(0.64 + -0.3 * (sq * pi).sin(), -0.6 + 0.4 * (sq * pi * 2.0).sin() - equip * 0.6, -0.72 - 0.4 * (swing * pi).sin())
-                * Mat4::rot_y(45f32.to_radians())
-                * Mat4::rot_y(((sq * pi).sin() * 70.0).to_radians())
-                * Mat4::rot_z(((swing * swing * pi).sin() * -20.0).to_radians())
-                * Mat4::translate(-1.0, 3.6, 3.5)
-                * Mat4::rot_z(120f32.to_radians())
-                * Mat4::rot_x(200f32.to_radians())
-                * Mat4::rot_y(-135f32.to_radians())
-                * Mat4::translate(5.6, 0.0, 0.0);
+            // Steve's right arm, pointing from the lower right towards the centre
+            let hand = v3(0.5 - 0.35 * (sq * pi).sin(), -0.36 + 0.25 * (sq * pi * 2.0).sin() - equip * 0.6, -0.78 - 0.25 * (swing * pi).sin());
+            let dir = v3(-0.28 + 0.2 * (sq * pi).sin(), 0.45 + 0.3 * (sq * pi).sin(), -0.87).norm();
+            let side = dir.cross(v3(0.0, 1.0, 0.0)).norm();
+            let zb = side.cross(dir).norm();
+            // model y (down the arm) -> dir; model x -> side; model z -> zb
+            let m = base * Mat4::from_basis(side * -1.0, dir, zb, hand) * Mat4::scale(1.0, 1.0, 1.0) * Mat4::translate(1.0 / 16.0, -10.0 / 16.0, 0.0);
             let parts = models::build(ModelKind::Biped);
             let arm = &parts[2];
-            let root = m * Mat4::scale(-1.0, -1.0, 1.0);
-            let am = root * Mat4::translate(arm.pivot[0] / 16.0, arm.pivot[1] / 16.0, arm.pivot[2] / 16.0);
+            let am = m;
             for b in &arm.boxes {
                 models::emit_box(&mut verts, b, &am, (64.0, 64.0), Shade { sky, block: blk, color: [255; 4] });
             }
