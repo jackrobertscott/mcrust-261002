@@ -68,6 +68,8 @@ Command-line extras:
 - `./play.sh --dump-assets DIR` writes every generated texture to `DIR` as PNG, plus a
   contact sheet.
 - `./play.sh --map SEED out.png` renders a top-down biome map.
+- `./play.sh --dump-sounds DIR` writes every synthesized sound effect (plus one music
+  piece) to `DIR` as WAV files and prints each one's peak and loudness.
 
 ## Features
 
@@ -116,6 +118,11 @@ Command-line extras:
     World, Options (sliders), Controls, Game Menu and the death screen.
   - In-game: inventory with player preview, the crafting table/furnace/chest windows,
     hotbar, hearts, hunger, air bubbles and the F3 debug screen.
+- **Sound:** every sound is synthesized at startup from filtered noise, struck-resonator
+  "modes" and a formant voice model: per-material dig, step and mining sounds; animal
+  calls and hurt sounds; doors, chests, buckets, shears, arrows, explosions, rain. Sounds
+  are loudness-matched with a frequency-weighted meter so bright ones aren't piercing, and
+  the mixer has a soft limiter. Music is a generative felt piano with stereo reverb.
 - **Saving:** worlds are saved to `~/.mcrust/saves/` (autosaved every 5 minutes, and on
   quit).
 
@@ -147,7 +154,7 @@ that hotbar slot.
 | --- | --- |
 | `platform.rs` | Cocoa window, OpenGL context, input (Objective-C runtime FFI) |
 | `gl.rs` | OpenGL bindings, shaders, textures, buffers |
-| `audio.rs` | AudioQueue output, mixer, synthesized sounds and music |
+| `audio.rs` | AudioQueue output, limiter, DSP kit, synthesized sounds and music |
 | `world.rs`, `worldgen.rs` | Chunks, light propagation, terrain/biome generation |
 | `mesher.rs`, `render.rs` | Chunk meshing (AO and smooth lighting), sky, clouds |
 | `game.rs`, `physics.rs`, `entity.rs` | Simulation, player, mobs, items, fluids |

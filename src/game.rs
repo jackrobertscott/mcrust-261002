@@ -601,6 +601,10 @@ impl Game {
     }
 
     pub fn close_container(&mut self) {
+        if self.menu == Menu::Chest {
+            let (x, y, z) = self.open_pos;
+            self.sound_at_block("chest.close", x, y, z, 0.6);
+        }
         // return crafting grid and cursor contents
         let mut ret: Vec<ItemStack> = Vec::new();
         for s in self.player.craft2.iter_mut() {
@@ -696,8 +700,8 @@ impl Game {
         let mpos = m.body.pos;
         let kind = m.kind;
         if m.hurt(dmg, from, &mut self.rng) {
-            let name = mob_sound(kind);
-            self.sounds.push(SoundEvent { name, pos: Some(mpos), volume: 0.8, pitch: 1.2 });
+            let pitch = if m.alive() { 0.9 + self.rng.next_f32() * 0.2 } else { 0.8 };
+            self.sounds.push(SoundEvent { name: mob_hurt_sound(kind), pos: Some(mpos), volume: 1.0, pitch });
             let m = &mut self.mobs[i];
             if sprinting {
                 let d = self.player.look_dir();
@@ -1374,6 +1378,8 @@ impl Game {
         self.player.break_progress += speed;
         if self.tick_count % 4 == 0 {
             self.block_hit_particles(hit);
+            let pos = v3(hit.x as f32 + 0.5, hit.y as f32 + 0.5, hit.z as f32 + 0.5);
+            self.sounds.push(SoundEvent { name: crate::audio::step_sound(b), pos: Some(pos), volume: 0.3, pitch: 0.5 });
         }
         if self.player.break_progress >= 1.0 {
             self.player.break_progress = 0.0;
@@ -1756,6 +1762,7 @@ impl Game {
                         self.neighbor_changed(x + dx, y + dy, z + dz);
                     }
                     let filled = if b == WATER { item::WATER_BUCKET } else { item::LAVA_BUCKET };
+                    self.sound_at_block(if b == WATER { "bucket.fill" } else { "bucket.fill_lava" }, x, y, z, 1.0);
                     self.player.inv.consume_held(1);
                     let st = ItemStack::new(filled, 1);
                     if self.player.inv.held().is_empty() {
@@ -1778,7 +1785,7 @@ impl Game {
                 }
                 self.player.inv.damage_held(1);
                 self.player.start_swing();
-                self.sound("dig.cloth", Some(pos), 0.8);
+                self.sound("shear", Some(pos), 1.0);
             }
             return;
         }
@@ -1807,7 +1814,7 @@ impl Game {
                         self.world.set_meta(hit.x, lower_y + 1, hit.z, lm | 8);
                     }
                     self.player.start_swing();
-                    self.sound_at_block("dig.wood", hit.x, hit.y, hit.z, 0.6);
+                    self.sound_at_block(if lm & 4 != 0 { "door.open" } else { "door.close" }, hit.x, hit.y, hit.z, 0.8);
                     return;
                 }
                 BED => {
@@ -1818,6 +1825,7 @@ impl Game {
                     self.open_pos = (hit.x, hit.y, hit.z);
                     self.world.block_entities.entry(self.open_pos).or_insert_with(|| BlockEntity::Chest(vec![ItemStack::EMPTY; 27]));
                     self.menu = Menu::Chest;
+                    self.sound_at_block("chest.open", hit.x, hit.y, hit.z, 0.6);
                     return;
                 }
                 TNT => {
@@ -1863,6 +1871,7 @@ impl Game {
             if cur == AIR || block::def(cur).replaceable {
                 let fl = if held.id == item::WATER_BUCKET { WATER } else { LAVA };
                 self.set_block_updated(px, py, pz, fl, 0);
+                self.sound_at_block(if fl == WATER { "bucket.empty" } else { "bucket.empty_lava" }, px, py, pz, 1.0);
                 self.schedule_fluid(px, py, pz);
                 *self.player.inv.held_mut() = ItemStack::new(item::BUCKET, 1);
                 self.player.start_swing();
@@ -2019,7 +2028,7 @@ impl Game {
         }
         self.player.inv.consume_held(1);
         self.player.start_swing();
-        self.sound_at_block(crate::audio::dig_sound(pb), px, py, pz, 0.9);
+        self.sound_at_block(crate::audio::place_sound(pb), px, py, pz, 0.9);
     }
 
     fn fluid_raycast(&self) -> Option<(i32, i32, i32)> {
@@ -2371,7 +2380,9 @@ impl Game {
             let fuse_before = m.fuse;
             m.tick(&self.world, ppos, alive && !peaceful, skydark, self.rain > 0.2, &mut self.rng, &mut events);
             if m.alive() && self.rng.chance(1.0 / 240.0) {
-                amb.push((mob_sound(m.kind), m.body.pos));
+                if let Some(name) = mob_sound(m.kind) {
+                    amb.push((name, m.body.pos));
+                }
             }
             if m.kind == MobKind::Sheep && m.sheared && m.alive() && self.rng.chance(1.0 / 600.0) {
                 let (x, y, z) = m.body.pos.floor();
@@ -2591,6 +2602,7 @@ impl Game {
 
     fn tick_arrows(&mut self) {
         let mut hits_player = Vec::new();
+        let mut sounds: Vec<(&'static str, Vec3, f32)> = Vec::new();
         for a in self.arrows.iter_mut() {
             a.prev_pos = a.pos;
             a.age += 1;
@@ -2603,6 +2615,7 @@ impl Game {
                 let (x, y, z) = np.floor();
                 if block::is_solid(self.world.get(x, y, z)) {
                     a.stuck = true;
+                    sounds.push(("arrow.hit", a.pos, 1.0));
                     break;
                 }
                 a.pos = np;
@@ -2613,7 +2626,10 @@ impl Game {
                         let dmg = (a.damage * speed / 3.0).max(1.0).ceil();
                         m.invuln = 0;
                         let from = a.pos - a.vel;
-                        m.hurt(dmg, from, &mut self.rng);
+                        if m.hurt(dmg, from, &mut self.rng) {
+                            sounds.push((mob_hurt_sound(m.kind), m.body.pos, if m.alive() { 1.0 } else { 0.8 }));
+                        }
+                        sounds.push(("arrow.hit", a.pos, 1.0));
                         a.age = 10000;
                         break;
                     }
@@ -2629,6 +2645,9 @@ impl Game {
             }
             a.vel = a.vel * 0.99;
             a.vel.y -= 0.05;
+        }
+        for (name, pos, pitch) in sounds {
+            self.sounds.push(SoundEvent { name, pos: Some(pos), volume: 0.8, pitch: pitch * (0.9 + self.rng.next_f32() * 0.2) });
         }
         for (i, dmg) in hits_player.into_iter().enumerate() {
             let _ = i;
@@ -2735,8 +2754,9 @@ impl Game {
     }
 }
 
-pub fn mob_sound(k: MobKind) -> &'static str {
-    match k {
+/// Ambient sound a mob makes now and then (creepers are silent, as in vanilla).
+pub fn mob_sound(k: MobKind) -> Option<&'static str> {
+    Some(match k {
         MobKind::Pig => "pig",
         MobKind::Cow => "cow",
         MobKind::Sheep => "sheep",
@@ -2744,7 +2764,20 @@ pub fn mob_sound(k: MobKind) -> &'static str {
         MobKind::Zombie => "zombie",
         MobKind::Skeleton => "skeleton",
         MobKind::Spider => "spider",
-        MobKind::Creeper => "mobhurt",
+        MobKind::Creeper => return None,
+    })
+}
+
+pub fn mob_hurt_sound(k: MobKind) -> &'static str {
+    match k {
+        MobKind::Pig => "pig.hurt",
+        MobKind::Cow => "cow.hurt",
+        MobKind::Sheep => "sheep.hurt",
+        MobKind::Chicken => "chicken.hurt",
+        MobKind::Zombie => "zombie.hurt",
+        MobKind::Skeleton => "skeleton.hurt",
+        MobKind::Spider => "spider.hurt",
+        MobKind::Creeper => "creeper.hurt",
     }
 }
 

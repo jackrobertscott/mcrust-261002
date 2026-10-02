@@ -40,6 +40,10 @@ fn main() {
         println!("assets written to {dir}");
         return;
     }
+    if args.len() >= 2 && args[1] == "--dump-sounds" {
+        audio::dump_sounds(args.get(2).map(|s| s.as_str()).unwrap_or("sound_dump"));
+        return;
+    }
     if args.len() >= 4 && args[1] == "--map" {
         worldgen::debug_map(args[2].parse().unwrap_or(1), &args[3], 512, 8);
         return;
