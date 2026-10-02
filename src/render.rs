@@ -105,11 +105,6 @@ pub struct SectionMesh {
     pub trans: Mesh,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum AtlasKind {
-    Blocks,
-    Items,
-}
 
 /// Rectangle in an atlas, in pixels.
 #[derive(Clone, Copy, Debug)]
@@ -428,11 +423,6 @@ impl Renderer {
             self.sections.remove(&(cx, sy, cz));
             self.section_gen.remove(&(cx, sy, cz));
         }
-    }
-
-    pub fn clear_all(&mut self) {
-        self.sections.clear();
-        self.section_gen.clear();
     }
 
     /// Set the common world-shader uniforms.

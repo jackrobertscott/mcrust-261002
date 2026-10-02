@@ -82,8 +82,6 @@ impl Biome {
 pub struct Column {
     pub height: i32,
     pub biome: Biome,
-    pub temp: f64,
-    pub humid: f64,
 }
 
 pub struct Generator {
@@ -100,7 +98,6 @@ pub struct Generator {
     cave3: Perlin,
     cheese: Octaves,
     surface: Perlin,
-    misc: Perlin,
 }
 
 fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
@@ -124,7 +121,6 @@ impl Generator {
             cave3: Perlin::new(seed ^ 0xAAAA),
             cheese: Octaves::new(seed ^ 0xBBBB, 2),
             surface: Perlin::new(seed ^ 0xCCCC),
-            misc: Perlin::new(seed ^ 0xDDDD),
         }
     }
 
@@ -181,7 +177,7 @@ impl Generator {
         if biome == Biome::Swamp {
             height = height.min(SEA_LEVEL + 1).max(SEA_LEVEL - 1);
         }
-        Column { height, biome, temp, humid }
+        Column { height, biome }
     }
 
     fn pick_biome(&self, height: i32, t: f64, h: f64, cont: f64, ero: f64, river: bool) -> Biome {

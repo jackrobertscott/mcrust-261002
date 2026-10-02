@@ -869,7 +869,7 @@ impl Game {
             b.vel.x += mx * accel;
             b.vel.z += mz * accel;
         };
-        let mut landed = None;
+        let landed;
         if b.in_water || b.in_lava {
             let y0 = b.pos.y;
             move_relative(b, 0.02);

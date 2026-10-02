@@ -182,11 +182,6 @@ impl Audio {
         }
     }
 
-    pub fn play_rand(&mut self, name: &str, pos: Option<Vec3>, volume: f32) {
-        let p = 0.85 + self.rng.next_f32() * 0.3;
-        self.play(name, pos, volume, p);
-    }
-
     fn music_playing(&self) -> bool {
         self.mixer.and_then(|m| m.lock().ok().map(|m| m.voices.iter().any(|v| v.music))).unwrap_or(false)
     }
@@ -569,7 +564,7 @@ fn compose_piece(seed: u64) -> Vec<f32> {
     let total = beat * 4.0 * bars as f32 + 4.0;
     let n = (RATE * total) as usize;
     let mut out = vec![0.0f32; n];
-    let mut add_note = |midi: i32, start: f32, vel: f32, out: &mut Vec<f32>| {
+    let add_note = |midi: i32, start: f32, vel: f32, out: &mut Vec<f32>| {
         let f = 440.0 * 2f32.powf((midi as f32 - 69.0) / 12.0);
         let st = (start * RATE) as usize;
         let dur = (RATE * 3.5) as usize;

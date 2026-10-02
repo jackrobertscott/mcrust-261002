@@ -12,6 +12,7 @@ use crate::world::{BlockEntity, Chunk, World, CHUNK_H};
 pub struct WorldInfo {
     pub folder: String,
     pub name: String,
+    #[allow(dead_code)]
     pub seed: u64,
     pub last_played: u64,
     pub time: i64,

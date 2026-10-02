@@ -150,7 +150,6 @@ impl FurnaceState {
 pub enum Ing {
     Item(ItemId),
     AnyPlanks,
-    AnyLog,
     AnyCobble,
 }
 
@@ -159,7 +158,6 @@ impl Ing {
         match *self {
             Ing::Item(i) => i == id,
             Ing::AnyPlanks => id < 256 && (block::OAK_PLANKS..=block::ACACIA_PLANKS).contains(&(id as u8)),
-            Ing::AnyLog => id < 256 && block::is_log(id as u8),
             Ing::AnyCobble => id == block::COBBLESTONE as ItemId,
         }
     }
@@ -171,7 +169,6 @@ pub struct Recipe {
     pub key: &'static [(char, Ing)],
     pub result: ItemId,
     pub count: u8,
-    pub shapeless: bool,
 }
 
 const fn b(id: u8) -> ItemId {
@@ -180,37 +177,37 @@ const fn b(id: u8) -> ItemId {
 
 use Ing::*;
 pub static RECIPES: &[Recipe] = &[
-    Recipe { pattern: &["#"], key: &[('#', Item(b(block::OAK_LOG)))], result: b(block::OAK_PLANKS), count: 4, shapeless: false },
-    Recipe { pattern: &["#"], key: &[('#', Item(b(block::BIRCH_LOG)))], result: b(block::BIRCH_PLANKS), count: 4, shapeless: false },
-    Recipe { pattern: &["#"], key: &[('#', Item(b(block::SPRUCE_LOG)))], result: b(block::SPRUCE_PLANKS), count: 4, shapeless: false },
-    Recipe { pattern: &["#"], key: &[('#', Item(b(block::JUNGLE_LOG)))], result: b(block::JUNGLE_PLANKS), count: 4, shapeless: false },
-    Recipe { pattern: &["#"], key: &[('#', Item(b(block::ACACIA_LOG)))], result: b(block::ACACIA_PLANKS), count: 4, shapeless: false },
-    Recipe { pattern: &["#", "#"], key: &[('#', AnyPlanks)], result: item::STICK, count: 4, shapeless: false },
-    Recipe { pattern: &["##", "##"], key: &[('#', AnyPlanks)], result: b(block::CRAFTING_TABLE), count: 1, shapeless: false },
-    Recipe { pattern: &["C", "S"], key: &[('C', Item(item::COAL)), ('S', Item(item::STICK))], result: b(block::TORCH), count: 4, shapeless: false },
-    Recipe { pattern: &["C", "S"], key: &[('C', Item(item::CHARCOAL)), ('S', Item(item::STICK))], result: b(block::TORCH), count: 4, shapeless: false },
-    Recipe { pattern: &["###", "# #", "###"], key: &[('#', AnyCobble)], result: b(block::FURNACE), count: 1, shapeless: false },
-    Recipe { pattern: &["###", "# #", "###"], key: &[('#', AnyPlanks)], result: b(block::CHEST), count: 1, shapeless: false },
-    Recipe { pattern: &["###"], key: &[('#', Item(item::WHEAT))], result: item::BREAD, count: 1, shapeless: false },
-    Recipe { pattern: &["##", "##"], key: &[('#', Item(b(block::SAND)))], result: b(block::SANDSTONE), count: 1, shapeless: false },
-    Recipe { pattern: &["##", "##"], key: &[('#', Item(item::STRING))], result: b(block::WOOL), count: 1, shapeless: false },
-    Recipe { pattern: &["##", "##"], key: &[('#', Item(b(block::SNOW_LAYER)))], result: b(block::SNOW_BLOCK), count: 1, shapeless: false },
-    Recipe { pattern: &["###", "###", "###"], key: &[('#', Item(item::COAL))], result: b(block::COAL_BLOCK), count: 1, shapeless: false },
-    Recipe { pattern: &["###", "###", "###"], key: &[('#', Item(item::IRON_INGOT))], result: b(block::IRON_BLOCK), count: 1, shapeless: false },
-    Recipe { pattern: &["###", "###", "###"], key: &[('#', Item(item::GOLD_INGOT))], result: b(block::GOLD_BLOCK), count: 1, shapeless: false },
-    Recipe { pattern: &["###", "###", "###"], key: &[('#', Item(item::DIAMOND))], result: b(block::DIAMOND_BLOCK), count: 1, shapeless: false },
-    Recipe { pattern: &["#"], key: &[('#', Item(b(block::COAL_BLOCK)))], result: item::COAL, count: 9, shapeless: false },
-    Recipe { pattern: &["#"], key: &[('#', Item(b(block::IRON_BLOCK)))], result: item::IRON_INGOT, count: 9, shapeless: false },
-    Recipe { pattern: &["#"], key: &[('#', Item(b(block::GOLD_BLOCK)))], result: item::GOLD_INGOT, count: 9, shapeless: false },
-    Recipe { pattern: &["#"], key: &[('#', Item(b(block::DIAMOND_BLOCK)))], result: item::DIAMOND, count: 9, shapeless: false },
-    Recipe { pattern: &["# #", " # "], key: &[('#', AnyPlanks)], result: item::BOWL, count: 4, shapeless: false },
-    Recipe { pattern: &["# #", " # "], key: &[('#', Item(item::IRON_INGOT))], result: item::BUCKET, count: 1, shapeless: false },
-    Recipe { pattern: &[" #S", "# S", " #S"], key: &[('#', Item(item::STICK)), ('S', Item(item::STRING))], result: item::BOW, count: 1, shapeless: false },
-    Recipe { pattern: &["F", "S", "E"], key: &[('F', Item(item::FLINT)), ('S', Item(item::STICK)), ('E', Item(item::FEATHER))], result: item::ARROW, count: 4, shapeless: false },
-    Recipe { pattern: &["###"], key: &[('#', Item(b(block::SUGAR_CANE)))], result: item::PAPER, count: 3, shapeless: false },
-    Recipe { pattern: &["#"], key: &[('#', Item(b(block::SUGAR_CANE)))], result: item::SUGAR, count: 1, shapeless: false },
-    Recipe { pattern: &["PPP", "BBB", "PPP"], key: &[('P', AnyPlanks), ('B', Item(item::PAPER))], result: b(block::BOOKSHELF), count: 1, shapeless: false },
-    Recipe { pattern: &["GSG", "SGS", "GSG"], key: &[('G', Item(item::GUNPOWDER)), ('S', Item(b(block::SAND)))], result: b(block::TNT), count: 1, shapeless: false },
+    Recipe { pattern: &["#"], key: &[('#', Item(b(block::OAK_LOG)))], result: b(block::OAK_PLANKS), count: 4 },
+    Recipe { pattern: &["#"], key: &[('#', Item(b(block::BIRCH_LOG)))], result: b(block::BIRCH_PLANKS), count: 4 },
+    Recipe { pattern: &["#"], key: &[('#', Item(b(block::SPRUCE_LOG)))], result: b(block::SPRUCE_PLANKS), count: 4 },
+    Recipe { pattern: &["#"], key: &[('#', Item(b(block::JUNGLE_LOG)))], result: b(block::JUNGLE_PLANKS), count: 4 },
+    Recipe { pattern: &["#"], key: &[('#', Item(b(block::ACACIA_LOG)))], result: b(block::ACACIA_PLANKS), count: 4 },
+    Recipe { pattern: &["#", "#"], key: &[('#', AnyPlanks)], result: item::STICK, count: 4 },
+    Recipe { pattern: &["##", "##"], key: &[('#', AnyPlanks)], result: b(block::CRAFTING_TABLE), count: 1 },
+    Recipe { pattern: &["C", "S"], key: &[('C', Item(item::COAL)), ('S', Item(item::STICK))], result: b(block::TORCH), count: 4 },
+    Recipe { pattern: &["C", "S"], key: &[('C', Item(item::CHARCOAL)), ('S', Item(item::STICK))], result: b(block::TORCH), count: 4 },
+    Recipe { pattern: &["###", "# #", "###"], key: &[('#', AnyCobble)], result: b(block::FURNACE), count: 1 },
+    Recipe { pattern: &["###", "# #", "###"], key: &[('#', AnyPlanks)], result: b(block::CHEST), count: 1 },
+    Recipe { pattern: &["###"], key: &[('#', Item(item::WHEAT))], result: item::BREAD, count: 1 },
+    Recipe { pattern: &["##", "##"], key: &[('#', Item(b(block::SAND)))], result: b(block::SANDSTONE), count: 1 },
+    Recipe { pattern: &["##", "##"], key: &[('#', Item(item::STRING))], result: b(block::WOOL), count: 1 },
+    Recipe { pattern: &["##", "##"], key: &[('#', Item(b(block::SNOW_LAYER)))], result: b(block::SNOW_BLOCK), count: 1 },
+    Recipe { pattern: &["###", "###", "###"], key: &[('#', Item(item::COAL))], result: b(block::COAL_BLOCK), count: 1 },
+    Recipe { pattern: &["###", "###", "###"], key: &[('#', Item(item::IRON_INGOT))], result: b(block::IRON_BLOCK), count: 1 },
+    Recipe { pattern: &["###", "###", "###"], key: &[('#', Item(item::GOLD_INGOT))], result: b(block::GOLD_BLOCK), count: 1 },
+    Recipe { pattern: &["###", "###", "###"], key: &[('#', Item(item::DIAMOND))], result: b(block::DIAMOND_BLOCK), count: 1 },
+    Recipe { pattern: &["#"], key: &[('#', Item(b(block::COAL_BLOCK)))], result: item::COAL, count: 9 },
+    Recipe { pattern: &["#"], key: &[('#', Item(b(block::IRON_BLOCK)))], result: item::IRON_INGOT, count: 9 },
+    Recipe { pattern: &["#"], key: &[('#', Item(b(block::GOLD_BLOCK)))], result: item::GOLD_INGOT, count: 9 },
+    Recipe { pattern: &["#"], key: &[('#', Item(b(block::DIAMOND_BLOCK)))], result: item::DIAMOND, count: 9 },
+    Recipe { pattern: &["# #", " # "], key: &[('#', AnyPlanks)], result: item::BOWL, count: 4 },
+    Recipe { pattern: &["# #", " # "], key: &[('#', Item(item::IRON_INGOT))], result: item::BUCKET, count: 1 },
+    Recipe { pattern: &[" #S", "# S", " #S"], key: &[('#', Item(item::STICK)), ('S', Item(item::STRING))], result: item::BOW, count: 1 },
+    Recipe { pattern: &["F", "S", "E"], key: &[('F', Item(item::FLINT)), ('S', Item(item::STICK)), ('E', Item(item::FEATHER))], result: item::ARROW, count: 4 },
+    Recipe { pattern: &["###"], key: &[('#', Item(b(block::SUGAR_CANE)))], result: item::PAPER, count: 3 },
+    Recipe { pattern: &["#"], key: &[('#', Item(b(block::SUGAR_CANE)))], result: item::SUGAR, count: 1 },
+    Recipe { pattern: &["PPP", "BBB", "PPP"], key: &[('P', AnyPlanks), ('B', Item(item::PAPER))], result: b(block::BOOKSHELF), count: 1 },
+    Recipe { pattern: &["GSG", "SGS", "GSG"], key: &[('G', Item(item::GUNPOWDER)), ('S', Item(b(block::SAND)))], result: b(block::TNT), count: 1 },
 ];
 
 /// Tool recipes are generated: material ingredient per tier.

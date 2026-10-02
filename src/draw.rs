@@ -170,7 +170,6 @@ pub struct Camera {
 
 pub struct Scene {
     pub items: ItemModels,
-    pub frame_time: f32,
 }
 
 fn sky_colors(g: &Game, cam_pos: Vec3) -> ([f32; 3], [f32; 3], Option<[f32; 4]>, f32) {
@@ -204,7 +203,7 @@ fn sky_colors(g: &Game, cam_pos: Vec3) -> ([f32; 3], [f32; 3], Option<[f32; 4]>,
 
 impl Scene {
     pub fn new() -> Scene {
-        Scene { items: ItemModels::new(), frame_time: 0.0 }
+        Scene { items: ItemModels::new() }
     }
 
     pub fn camera(&self, g: &Game, aspect: f32, alpha: f32, panorama: bool) -> Camera {

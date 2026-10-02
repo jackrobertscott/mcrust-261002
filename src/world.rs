@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
-use crate::block::{self, *};
+use crate::block::*;
 use crate::worldgen::{Biome, Generator};
 
 pub const CHUNK_H: usize = 128;
@@ -67,28 +67,11 @@ impl Chunk {
         self.meta[i] = 0;
     }
     #[inline]
-    pub fn get_meta(&self, x: i32, y: i32, z: i32) -> u8 {
-        if y < 0 || y >= CHUNK_H as i32 {
-            return 0;
-        }
-        self.meta[idx(x, y, z)]
-    }
-    #[inline]
     pub fn set_meta(&mut self, x: i32, y: i32, z: i32, m: u8) {
         if y < 0 || y >= CHUNK_H as i32 {
             return;
         }
         self.meta[idx(x, y, z)] = m;
-    }
-    #[inline]
-    pub fn light_at(&self, x: i32, y: i32, z: i32) -> u8 {
-        if y >= CHUNK_H as i32 {
-            return 0xF0;
-        }
-        if y < 0 {
-            return 0;
-        }
-        self.light[idx(x, y, z)]
     }
     pub fn biome(&self, x: i32, z: i32) -> Biome {
         Biome::from_u8(self.biomes[(z * 16 + x) as usize])
@@ -615,9 +598,5 @@ impl World {
             Some(c) => c.grass_color[((z & 15) * 16 + (x & 15)) as usize],
             None => 0x91BD59,
         }
-    }
-
-    pub fn is_solid_at(&self, x: i32, y: i32, z: i32) -> bool {
-        block::is_solid(self.get(x, y, z))
     }
 }
