@@ -363,6 +363,19 @@ fn run_script(g: &mut Game, win: &mut Window, script: &str, t: f32) {
                 g.selected_world = Some(0);
                 g.menu = Menu::SelectWorld;
             }
+            Some("fillrel") => {
+                let v: Vec<i32> = parts.filter_map(|s| s.parse().ok()).collect();
+                if v.len() == 7 {
+                    let (px, py, pz) = g.player.body.pos.floor();
+                    for y in v[1]..=v[4] {
+                        for z in v[2]..=v[5] {
+                            for x in v[0]..=v[3] {
+                                g.set_block_updated(px + x, py + y, pz + z, v[6] as u8, 0);
+                            }
+                        }
+                    }
+                }
+            }
             Some("slot") => g.player.inv.selected = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0),
             Some("hurt") => g.damage_player(parts.next().and_then(|s| s.parse().ok()).unwrap_or(1.0), None),
             _ => {}

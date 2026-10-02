@@ -520,17 +520,66 @@ fn mesh_torch(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32) {
     emit_torch(&mut b.solid, tiles, [x as f32, y as f32, z as f32], meta, light);
 }
 
-fn mesh_liquid(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32, id: u8) {
-    let tile = b.tiles.blocks[id as usize][0];
-    let above = inp.b(x, y + 1, z);
-    let level = inp.m(x, y, z);
-    let top_h = if above == id {
-        1.0
-    } else if level == 0 || level >= 8 {
+fn liquid_level_height(inp: &MeshInput, x: i32, y: i32, z: i32, id: u8) -> f32 {
+    let m = inp.m(x, y, z);
+    if m == 0 || m >= 8 {
         14.0 / 16.0
     } else {
-        ((8 - level) as f32 / 9.0).max(1.0 / 9.0)
+        ((8 - m) as f32 / 9.0).max(1.0 / 9.0)
+    }
+    .min(if inp.b(x, y + 1, z) == id { 1.0 } else { 1.0 })
+}
+
+/// Vanilla-style smooth surface height at a corner shared by 4 cells.
+fn liquid_corner(inp: &MeshInput, x: i32, y: i32, z: i32, cx: i32, cz: i32, id: u8) -> f32 {
+    let mut total = 0.0;
+    let mut n = 0.0;
+    for (dx, dz) in [(cx - 1, cz - 1), (cx, cz - 1), (cx - 1, cz), (cx, cz)] {
+        let (bx, bz) = (x + dx, z + dz);
+        let b = inp.b(bx, y, bz);
+        if b == id {
+            if inp.b(bx, y + 1, bz) == id {
+                return 1.0;
+            }
+            let h = liquid_level_height(inp, bx, y, bz, id);
+            let m = inp.m(bx, y, bz);
+            if m == 0 || m >= 8 {
+                total += h * 10.0;
+                n += 10.0;
+            } else {
+                total += h;
+                n += 1.0;
+            }
+        } else if !block::is_solid(b) {
+            n += 1.0;
+        }
+    }
+    if n == 0.0 { 14.0 / 16.0 } else { total / n }
+}
+
+fn mesh_liquid(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32, id: u8) {
+    let tile = b.tiles.blocks[id as usize][0];
+    let above_same = inp.b(x, y + 1, z) == id;
+    // corner heights: [x0z0, x1z0, x1z1, x0z1]
+    let ch = if above_same {
+        [1.0; 4]
+    } else {
+        [
+            liquid_corner(inp, x, y, z, 0, 0, id),
+            liquid_corner(inp, x, y, z, 1, 0, id),
+            liquid_corner(inp, x, y, z, 1, 1, id),
+            liquid_corner(inp, x, y, z, 0, 1, id),
+        ]
     };
+    let corner_h = |cx: f32, cz: f32| -> f32 {
+        match (cx > 0.5, cz > 0.5) {
+            (false, false) => ch[0],
+            (true, false) => ch[1],
+            (true, true) => ch[2],
+            (false, true) => ch[3],
+        }
+    };
+    let top_h = ch.iter().cloned().fold(0.0f32, f32::max);
     let translucent = id == WATER;
     for face in 0..6 {
         let (nx, ny, nz) = NORMALS[face];
@@ -538,16 +587,21 @@ fn mesh_liquid(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32, id: u8)
         if face != 3 && block::is_opaque(nb) {
             continue;
         }
-        if nb == id {
-            // show the step between liquid of different heights on the sides
-            let nm = inp.m(x + nx, y + ny, z + nz);
+        if nb == id && face != 3 {
+            if face == 2 {
+                continue;
+            }
+            // side between liquids: only where this one is higher
             let n_above = inp.b(x + nx, y + ny + 1, z + nz) == id;
-            let nh = if n_above { 1.0 } else if nm == 0 || nm >= 8 { 14.0 / 16.0 } else { ((8 - nm) as f32 / 9.0).max(1.0 / 9.0) };
-            if face == 2 || face == 3 || nh >= top_h {
+            if n_above || above_same {
+                continue;
+            }
+            let nh = liquid_level_height(inp, x + nx, y + ny, z + nz, id);
+            if nh >= top_h - 0.01 {
                 continue;
             }
         }
-        if face == 3 && block::is_opaque(nb) && top_h >= 1.0 {
+        if face == 3 && (above_same || (block::is_opaque(nb) && top_h >= 1.0)) {
             continue;
         }
         if id == WATER && nb == ICE {
@@ -560,7 +614,7 @@ fn mesh_liquid(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32, id: u8)
         let mut uvs = [[0.0; 2]; 4];
         for i in 0..4 {
             let c = FACE_VERTS[face][i];
-            let cy = if c[1] > 0.5 { top_h } else { 0.0 };
+            let cy = if c[1] > 0.5 { corner_h(c[0], c[2]) } else { 0.0 };
             pos[i] = [x as f32 + c[0], y as f32 + cy, z as f32 + c[2]];
             let v = if face == 3 || face == 2 { FACE_UVS[i][1] } else { 1.0 - cy };
             uvs[i] = tile_uv(b.tiles, tile, FACE_UVS[i][0], v);

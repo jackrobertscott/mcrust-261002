@@ -540,18 +540,6 @@ impl Renderer {
                 v.extend_from_slice(&[mk(x0, z0), mk(x1, z0), mk(x1, z1), mk(x0, z0), mk(x1, z1), mk(x0, z1)]);
             }
         }
-        // dark void plane below
-        let vc = [(sky_color[0] * 0.2 * 255.0) as u8, (sky_color[1] * 0.2 * 255.0) as u8, (sky_color[2] * 0.6 * 255.0) as u8, 255];
-        for i in 0..n {
-            for j in 0..n {
-                let x0 = -r + 2.0 * r * i as f32 / n as f32;
-                let x1 = -r + 2.0 * r * (i + 1) as f32 / n as f32;
-                let z0 = -r + 2.0 * r * j as f32 / n as f32;
-                let z1 = -r + 2.0 * r * (j + 1) as f32 / n as f32;
-                let mk = |x: f32, z: f32| Vertex { pos: [x, -h, z], uv: [0.5, 0.5], color: vc, light: [255, 255, 255, 0] };
-                v.extend_from_slice(&[mk(x0, z0), mk(x1, z0), mk(x1, z1), mk(x0, z0), mk(x1, z1), mk(x0, z1)]);
-            }
-        }
         self.draw_stream(&v);
 
         unsafe {
