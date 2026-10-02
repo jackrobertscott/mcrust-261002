@@ -32,6 +32,9 @@ impl Input {
         }
         Input { click, shift: win.key(key::SHIFT), events: win.events.clone(), mouse_down: win.buttons[0] }
     }
+    pub fn empty() -> Input {
+        Input { click: None, shift: false, events: Vec::new(), mouse_down: false }
+    }
     pub fn key_pressed(&self, k: u16) -> bool {
         self.events.iter().any(|e| matches!(e, Event::KeyDown(c, _) if *c == k))
     }

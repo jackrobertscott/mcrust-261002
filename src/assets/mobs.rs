@@ -945,7 +945,7 @@ fn sun() -> Image {
             let dy = (y as f32 + 0.5 - 16.0).abs();
             let d = dx.max(dy);
             if d >= 8.0 && d < 12.0 {
-                let a = ((12.0 - d) / 4.0 * 110.0) as u8;
+                let a = ((12.0 - d) / 4.0 * 45.0) as u8;
                 img.set(x, y, [255, 230, 120, a]);
             }
         }

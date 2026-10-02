@@ -128,6 +128,7 @@ fn main() {
             was_menu = game.menu;
         }
 
+        let menu_before_input = game.menu;
         if playing && (win.is_mouse_locked() || shot.is_some()) && !game.player.dead {
             let f = game.options.sensitivity * 0.6 + 0.2;
             let f3 = f * f * f * 8.0;
@@ -198,7 +199,12 @@ fn main() {
         }
 
         // ---------------- render ----------------
-        let input = screens::Input::from_window(&win);
+        // A key that opened a screen this frame must not also act on that screen.
+        let input = if game.menu != menu_before_input && menu_before_input == Menu::None {
+            screens::Input::empty()
+        } else {
+            screens::Input::from_window(&win)
+        };
         let world_visible = !matches!(game.menu, Menu::Loading | Menu::CreateWorld | Menu::SelectWorld) && !(!game.in_world && matches!(game.menu, Menu::Options | Menu::Controls));
         if world_visible {
             scene.draw_world(&game, &mut r, alpha, !game.in_world);
@@ -329,6 +335,10 @@ fn run_script(g: &mut Game, win: &mut Window, script: &str, t: f32) {
                 for m in g.mobs.iter_mut().filter(|m| m.persistent) {
                     m.health = hp;
                 }
+            }
+            Some("keyev") => {
+                let k: u16 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+                win.events.push(platform::Event::KeyDown(k, false));
             }
             Some("lmb") => win.buttons[0] = parts.next() == Some("1"),
             Some("rmb") => win.buttons[1] = parts.next() == Some("1"),
