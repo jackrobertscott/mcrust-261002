@@ -48,6 +48,7 @@ items! {
     PAPER = 287, "Paper", "paper";
     OAK_DOOR_ITEM = 290, "Oak Door", "oak_door";
     BED_ITEM = 291, "Bed", "red_bed";
+    SHEARS = 292, "Shears", "shears";
     WOODEN_PICKAXE = 300, "Wooden Pickaxe", "wooden_pickaxe";
     WOODEN_AXE = 301, "Wooden Axe", "wooden_axe";
     WOODEN_SHOVEL = 302, "Wooden Shovel", "wooden_shovel";
@@ -160,7 +161,7 @@ pub fn tool_info(id: ItemId) -> Option<ToolInfo> {
 }
 
 pub fn max_stack(id: ItemId) -> u8 {
-    if tool_info(id).is_some() || matches!(id, BOW | WATER_BUCKET | LAVA_BUCKET | BED_ITEM) {
+    if tool_info(id).is_some() || matches!(id, BOW | WATER_BUCKET | LAVA_BUCKET | BED_ITEM | SHEARS) {
         1
     } else if matches!(id, EGG | BUCKET) {
         16
@@ -170,7 +171,15 @@ pub fn max_stack(id: ItemId) -> u8 {
 }
 
 pub fn max_damage(id: ItemId) -> u16 {
-    if let Some(t) = tool_info(id) { t.durability() } else if id == BOW { 384 } else { 0 }
+    if let Some(t) = tool_info(id) {
+        t.durability()
+    } else if id == BOW {
+        384
+    } else if id == SHEARS {
+        238
+    } else {
+        0
+    }
 }
 
 /// (hunger points, saturation) restored when eaten.

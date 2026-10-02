@@ -45,7 +45,7 @@ Command-line extras:
   - Harvest levels (e.g. iron ore needs a stone pickaxe) and tool durability.
 - **Crafting:** 2x2 in the inventory and 3x3 at the crafting table. Recipes include planks,
   sticks, torches, crafting table, furnace, chest, all 25 tools (wood, stone, iron, gold,
-  diamond), doors, ladders, fences, beds, bread, bucket, bow, arrows, sandstone, storage blocks, bookshelf, TNT and more.
+  diamond), shears, doors, ladders, fences, beds, bread, bucket, bow, arrows, sandstone, storage blocks, bookshelf, TNT and more.
   Shift-click to craft in bulk.
 - **Building basics:** doors (open them with right-click), ladders you can climb, fences
   that connect to each other, and beds. Sleeping in a bed at night skips to morning and sets
@@ -57,7 +57,8 @@ Command-line extras:
   wheat.
 - **Saplings** drop from leaves and grow into trees. Grass spreads, leaves decay, sugar cane
   and cacti grow.
-- **Mobs:** pigs, cows, sheep and chickens (which lay eggs), plus zombies (which burn in
+- **Mobs:** pigs, cows, sheep (shear them for wool; it regrows when they graze) and
+  chickens (which lay eggs), plus zombies (which burn in
   daylight), skeletons (which shoot arrows), creepers (which explode) and spiders (which
   climb walls). They spawn in the dark and drop items when killed.
 - **Combat:** swords, critical hits, knockback, and bows you can draw and fire.

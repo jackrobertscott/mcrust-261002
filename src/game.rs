@@ -1311,6 +1311,13 @@ impl Game {
         let tool = item::tool_info(held.id);
         let mut speed = 1.0;
         let mut can_harvest = d.tier == 0;
+        if held.id == item::SHEARS {
+            if block::is_leaves(b) {
+                speed = 15.0;
+            } else if b == WOOL {
+                speed = 5.0;
+            }
+        }
         if let Some(t) = tool {
             let effective = t.kind == d.tool || (t.kind == Tool::Sword && (block::is_leaves(b) || b == PUMPKIN)) || (t.kind == Tool::Hoe && block::is_leaves(b));
             if effective {
@@ -1375,6 +1382,9 @@ impl Game {
             self.break_block(hit.x, hit.y, hit.z, true);
             self.player.add_exhaustion(0.005);
             let held = self.player.inv.held();
+            if held.id == item::SHEARS && (block::is_leaves(b) || b == WOOL || b == SHORT_GRASS || b == FERN) {
+                self.player.inv.damage_held(1);
+            }
             if let Some(t) = item::tool_info(held.id) {
                 if block::def(b).hardness > 0.0 {
                     self.player.inv.damage_held(if t.kind == Tool::Sword { 2 } else { 1 });
@@ -1523,9 +1533,9 @@ impl Game {
                     one(item::WHEAT_SEEDS)
                 }
             }
+            OAK_LEAVES | BIRCH_LEAVES | SPRUCE_LEAVES | JUNGLE_LEAVES | ACACIA_LEAVES if self.player.inv.held().id == item::SHEARS => one(b as u16),
+            SHORT_GRASS | FERN if self.player.inv.held().id == item::SHEARS => one(b as u16),
             OAK_LEAVES | BIRCH_LEAVES | SPRUCE_LEAVES | JUNGLE_LEAVES | ACACIA_LEAVES => {
-                let held = self.player.inv.held();
-                let _ = held;
                 let mut v = vec![];
                 let sap = match b {
                     BIRCH_LEAVES => BIRCH_SAPLING,
@@ -1755,6 +1765,20 @@ impl Game {
                     }
                     self.player.start_swing();
                 }
+            }
+            return;
+        }
+        if let Target::Mob(i) = self.target {
+            if held.id == item::SHEARS && self.mobs[i].kind == MobKind::Sheep && !self.mobs[i].sheared && self.mobs[i].alive() {
+                self.mobs[i].sheared = true;
+                let pos = self.mobs[i].body.pos + v3(0.0, 1.0, 0.0);
+                let n = 1 + self.rng.range(3) as u8;
+                for _ in 0..n {
+                    self.spawn_item(pos, ItemStack::new(WOOL as u16, 1));
+                }
+                self.player.inv.damage_held(1);
+                self.player.start_swing();
+                self.sound("dig.cloth", Some(pos), 0.8);
             }
             return;
         }
@@ -2338,6 +2362,7 @@ impl Game {
         let skydark = self.skydark();
         let peaceful = self.options.difficulty == Difficulty::Peaceful;
         let mut amb = Vec::new();
+        let mut eat_grass = Vec::new();
         for m in self.mobs.iter_mut() {
             let (x, _, z) = m.body.pos.floor();
             if !self.world.is_loaded(x, z) {
@@ -2348,12 +2373,22 @@ impl Game {
             if m.alive() && self.rng.chance(1.0 / 240.0) {
                 amb.push((mob_sound(m.kind), m.body.pos));
             }
+            if m.kind == MobKind::Sheep && m.sheared && m.alive() && self.rng.chance(1.0 / 600.0) {
+                let (x, y, z) = m.body.pos.floor();
+                if self.world.get(x, y - 1, z) == GRASS {
+                    eat_grass.push((x, y - 1, z));
+                    m.sheared = false;
+                }
+            }
             if m.kind == MobKind::Creeper && fuse_before == 0 && m.fuse > 0 {
                 amb.push(("fuse", m.body.pos));
             }
         }
         for (n, p) in amb {
             self.sound(n, Some(p), 0.6);
+        }
+        for (x, y, z) in eat_grass {
+            self.world.set_block(x, y, z, DIRT, 0);
         }
         // simple separation between mobs
         let n = self.mobs.len();

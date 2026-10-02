@@ -211,6 +211,7 @@ pub static RECIPES: &[Recipe] = &[
     Recipe { pattern: &["# #", "###", "# #"], key: &[('#', Item(item::STICK))], result: b(block::LADDER), count: 3 },
     Recipe { pattern: &["PSP", "PSP"], key: &[('P', AnyPlanks), ('S', Item(item::STICK))], result: b(block::OAK_FENCE), count: 3 },
     Recipe { pattern: &["WWW", "PPP"], key: &[('W', Item(b(block::WOOL))), ('P', AnyPlanks)], result: item::BED_ITEM, count: 1 },
+    Recipe { pattern: &[" #", "# "], key: &[('#', Item(item::IRON_INGOT))], result: item::SHEARS, count: 1 },
     Recipe { pattern: &["GSG", "SGS", "GSG"], key: &[('G', Item(item::GUNPOWDER)), ('S', Item(b(block::SAND)))], result: b(block::TNT), count: 1 },
 ];
 

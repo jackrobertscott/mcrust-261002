@@ -70,6 +70,26 @@ pub const NAMES: &[&str] = &[
     "diamond_hoe",
     "oak_door",
     "red_bed",
+    "shears",
+];
+
+const SHEARS: Grid = [
+    "................",
+    "............KK..",
+    "...........KhlK.",
+    "..........KhlK..",
+    ".........KhlK.K.",
+    "........KhlKKhK.",
+    ".......KhlKKhlK.",
+    "......KhlKKhlK..",
+    ".....KhlKKhlK...",
+    "....KKpKKhlK....",
+    "...KddKKdKK.....",
+    "..KdKKdKdK......",
+    "..KdK.KdK.......",
+    "..KddKddK.......",
+    "...KKdKK........",
+    ".....K..........",
 ];
 
 type Grid = [&'static str; 16];
@@ -990,6 +1010,7 @@ pub fn get(name: &str) -> Option<Image> {
             &GUNPOWDER,
             &[('K', 0x262626), ('g', 0x5E5E5E), ('G', 0x8E8E8E), ('d', 0x3C3C3C)],
         ),
+        "shears" => sprite(&SHEARS, &[('K', 0x1C1C1C), ('h', 0xF2F2F2), ('l', 0xAAAAAA), ('p', 0x6B6B6B), ('d', 0x4A4A4A)]),
         "flint" => sprite(
             &FLINT,
             &[('K', 0x0E0E0E), ('h', 0x8C8C8C), ('l', 0x5A5A5A), ('d', 0x2F2F2F)],
