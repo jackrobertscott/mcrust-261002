@@ -24,6 +24,7 @@ pub const NAMES: &[&str] = &[
     "wheat_stage0", "wheat_stage1", "wheat_stage2", "wheat_stage3",
     "wheat_stage4", "wheat_stage5", "wheat_stage6", "wheat_stage7",
     "short_grass", "fern", "dandelion", "poppy", "blue_orchid", "dead_bush", "sugar_cane",
+    "oak_sapling", "birch_sapling", "spruce_sapling", "jungle_sapling", "acacia_sapling",
     "cactus_side", "cactus_top", "cactus_bottom", "white_wool", "bookshelf",
     "pumpkin_side", "pumpkin_top", "tnt_side", "tnt_top", "tnt_bottom",
     "destroy_stage_0", "destroy_stage_1", "destroy_stage_2", "destroy_stage_3",
@@ -84,6 +85,11 @@ pub fn get(name: &str) -> Option<Image> {
         "blue_orchid" => blue_orchid(),
         "dead_bush" => dead_bush(),
         "sugar_cane" => sugar_cane(),
+        "oak_sapling" => oak_sapling(),
+        "birch_sapling" => birch_sapling(),
+        "spruce_sapling" => spruce_sapling(),
+        "jungle_sapling" => jungle_sapling(),
+        "acacia_sapling" => acacia_sapling(),
         "cactus_side" => cactus_side(),
         "cactus_top" => cactus_top(false),
         "cactus_bottom" => cactus_top(true),
@@ -1631,6 +1637,148 @@ fn sugar_cane() -> Image {
         }
     }
     img
+}
+
+/// Saplings (cross-model plants, final colours). Grid chars: k/g/l/h leaves dark ->
+/// highlight, b/B stem dark/light.
+fn sapling(rows: &[&str], leaves: [u32; 4], stem: [u32; 2]) -> Image {
+    let [k, g, l, h] = leaves;
+    grid(
+        rows,
+        &[
+            ('k', rgb(k)),
+            ('g', rgb(g)),
+            ('l', rgb(l)),
+            ('h', rgb(h)),
+            ('b', rgb(stem[0])),
+            ('B', rgb(stem[1])),
+        ],
+    )
+}
+
+fn oak_sapling() -> Image {
+    sapling(
+        &[
+            "................",
+            "................",
+            "......kgk.......",
+            "....kgglhgk.k...",
+            "...kglhlggkglk..",
+            "..kglggkgglhlgk.",
+            "..kgggkglgkggk..",
+            ".kglhgkgBggkgk..",
+            "..kgggkgBkglgk..",
+            "...kgk.kBgkgk...",
+            "....k...Bk.k....",
+            "......kgB.......",
+            ".......kB.......",
+            "........B.......",
+            "........b.......",
+            "........b.......",
+        ],
+        [0x23500F, 0x3A7A1A, 0x55A128, 0x76BE3E],
+        [0x4F3818, 0x7A5A2C],
+    )
+}
+
+fn birch_sapling() -> Image {
+    sapling(
+        &[
+            "................",
+            "................",
+            ".......kk.......",
+            ".....kkglk......",
+            "....kglhlgkk....",
+            "...kglggglhgk...",
+            "..kglgkglgggk...",
+            "...kgkgBkglgk...",
+            "..kglgkBgkgk....",
+            "...kgk.Bk.k.....",
+            "....k..B........",
+            ".......Bkg......",
+            ".......B.k......",
+            ".......B........",
+            ".......b........",
+            ".......b........",
+        ],
+        [0x3D5C22, 0x5E8A38, 0x7EAA52, 0xA0C674],
+        [0x9E9A8E, 0xE4E1D6],
+    )
+}
+
+fn spruce_sapling() -> Image {
+    sapling(
+        &[
+            "................",
+            "........l.......",
+            ".......kgl......",
+            "......kgglk.....",
+            ".......kgk......",
+            "......kgglk.....",
+            ".....kgglggk....",
+            "....kgkgBglgk...",
+            "......kgBgk.....",
+            ".....kggBlgk....",
+            "....kgglBgglgk..",
+            "...kgkgkBgkgkgk.",
+            "......k.Bb.k....",
+            "........Bb......",
+            "........bb......",
+            "........bb......",
+        ],
+        [0x163220, 0x274D30, 0x3A6842, 0x52855A],
+        [0x3B2812, 0x5A3E1F],
+    )
+}
+
+fn jungle_sapling() -> Image {
+    sapling(
+        &[
+            "................",
+            "................",
+            "....kk....kk....",
+            "...kglk..klgk...",
+            "..kglhgkkghlgk..",
+            "..kgllgkkgllgk..",
+            ".kglggk..kgglgk.",
+            ".kgk.kglgk..kgk.",
+            "....kglhlgk.....",
+            "...kgk.Bkgk.....",
+            "..kgk..B..kgk...",
+            ".......Bkglgk...",
+            "....kgkB..kk....",
+            ".......B........",
+            ".......b........",
+            ".......b........",
+        ],
+        [0x1B4A0C, 0x2D7414, 0x45991F, 0x63B834],
+        [0x4A3712, 0x6E5523],
+    )
+}
+
+fn acacia_sapling() -> Image {
+    sapling(
+        &[
+            "................",
+            "................",
+            "....kggk........",
+            "..kgglhgk..kgk..",
+            ".kglhlgglk.kglgk",
+            ".kgglglggkkglhgk",
+            "..kgkgkgBkkgglgk",
+            "...k.kkB..kgkk..",
+            ".......B..kBk...",
+            "........B.B.....",
+            "........BB......",
+            "........B.......",
+            "........B.......",
+            "........B.......",
+            "........b.......",
+            "........b.......",
+        ],
+        [0x4A5E14, 0x6C8424, 0x8EA634, 0xB0C64E],
+        [0x5B5650, 0x7A7468],
+    )
 }
 
 fn wheat(stage: u32) -> Image {
