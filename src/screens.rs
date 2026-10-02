@@ -618,6 +618,26 @@ fn move_into(g: &mut Game, mut st: ItemStack, targets: &[SlotRef]) -> ItemStack 
     st
 }
 
+/// Would the whole stack fit into these slots?
+fn can_fit(g: &Game, st: ItemStack, targets: &[SlotRef]) -> bool {
+    let max = item::max_stack(st.id) as u32;
+    let mut need = st.count as u32;
+    for &t in targets {
+        let cur = get_slot(g, t);
+        if cur.is_empty() {
+            if accepts(t, &st) {
+                need = need.saturating_sub(max);
+            }
+        } else if cur.can_stack_with(&st) {
+            need = need.saturating_sub(max - (cur.count as u32).min(max));
+        }
+        if need == 0 {
+            return true;
+        }
+    }
+    need == 0
+}
+
 fn shift_click(g: &mut Game, s: SlotRef) {
     let st = get_slot(g, s);
     if st.is_empty() {
@@ -632,13 +652,10 @@ fn shift_click(g: &mut Game, s: SlotRef) {
             // craft as many as possible
             for _ in 0..64 {
                 let Some(res) = craft_result(g) else { break };
-                let left = move_into(g, res, &all_inv_rev);
-                if !left.is_empty() {
-                    if left.count < res.count {
-                        consume_craft_grid(g);
-                    }
+                if !can_fit(g, res, &all_inv_rev) {
                     break;
                 }
+                move_into(g, res, &all_inv_rev);
                 consume_craft_grid(g);
             }
         }

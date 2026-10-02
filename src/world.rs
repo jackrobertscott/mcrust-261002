@@ -600,3 +600,73 @@ impl World {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_world() -> World {
+        let mut w = World::new(14);
+        for cz in -1..=1 {
+            for cx in -1..=1 {
+                let mut ch = w.generator.generate(cx, cz);
+                ch.compute_initial_light();
+                w.insert_chunk(Box::new(ch));
+            }
+        }
+        w
+    }
+
+    #[test]
+    fn sky_light_in_shaft_and_cover() {
+        let mut w = test_world();
+        let (x, z) = (8, 8);
+        let top = w.surface_height(x, z);
+        // clear anything above the surface column (trees etc.)
+        for y in top - 6..CHUNK_H as i32 {
+            w.set_block(x, y, z, AIR, 0);
+        }
+        // surround the shaft with stone so only the top is open
+        for y in top - 6..top + 2 {
+            for (dx, dz) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                w.set_block(x + dx, y, z + dz, STONE, 0);
+            }
+        }
+        w.set_block(x, top - 7, z, STONE, 0);
+        assert_eq!(w.sky_light(x, top - 6, z), 15, "sky light should go straight down an open shaft");
+        // cover it
+        w.set_block(x, top + 1, z, STONE, 0);
+        assert!(w.sky_light(x, top - 6, z) < 15, "covered shaft must darken");
+        assert_eq!(w.sky_light(x, top - 6, z), 0);
+        // uncover
+        w.set_block(x, top + 1, z, AIR, 0);
+        assert_eq!(w.sky_light(x, top - 6, z), 15);
+    }
+
+    #[test]
+    fn torch_light_add_remove() {
+        let mut w = test_world();
+        // carve a closed room deep underground
+        let (x, y, z) = (4, 20, 4);
+        for dy in -1..=3 {
+            for dz in -4..=4i32 {
+                for dx in -4..=4i32 {
+                    let edge = dy == -1 || dy == 3 || dx.abs() == 4 || dz.abs() == 4;
+                    w.set_block(x + dx, y + dy, z + dz, if edge { STONE } else { AIR }, 0);
+                }
+            }
+        }
+        assert_eq!(w.block_light(x, y, z), 0);
+        w.set_block(x, y, z, TORCH, 0);
+        assert_eq!(w.block_light(x, y, z), 14);
+        assert_eq!(w.block_light(x + 1, y, z), 13);
+        assert_eq!(w.block_light(x + 3, y, z), 11);
+        w.set_block(x, y, z, AIR, 0);
+        assert_eq!(w.block_light(x, y, z), 0);
+        assert_eq!(w.block_light(x + 2, y, z), 0);
+        // blocking light with a wall
+        w.set_block(x, y, z, TORCH, 0);
+        w.set_block(x + 1, y, z, STONE, 0);
+        assert!(w.block_light(x + 2, y, z) <= 11);
+    }
+}
