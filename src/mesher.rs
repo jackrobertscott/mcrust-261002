@@ -38,6 +38,8 @@ pub struct MeshInput {
     /// 18x18 columns
     pub grass: Vec<u32>,
     pub foliage: Vec<u32>,
+    /// water tint multiplier per column
+    pub water: Vec<u32>,
 }
 
 #[inline]
@@ -58,6 +60,7 @@ impl MeshInput {
             light: vec![0xF0; n],
             grass: vec![0x91BD59; (P * P) as usize],
             foliage: vec![0x77AB2F; (P * P) as usize],
+            water: vec![0xFFFFFF; (P * P) as usize],
         };
         let y0 = sy * 16;
         for dcz in -1..=1 {
@@ -74,6 +77,12 @@ impl MeshInput {
                         let ti = ((pz + 1) * P + (px + 1)) as usize;
                         inp.grass[ti] = ch.grass_color[ci];
                         inp.foliage[ti] = ch.foliage_color[ci];
+                        inp.water[ti] = match crate::worldgen::Biome::from_u8(ch.biomes[ci]) {
+                            crate::worldgen::Biome::Swamp => 0x8FA88A,
+                            b if b.is_snowy() => 0xD8DCFF,
+                            crate::worldgen::Biome::Jungle | crate::worldgen::Biome::Savanna | crate::worldgen::Biome::Desert => 0xD8FFF4,
+                            _ => 0xFFFFFF,
+                        };
                         for py in -1..17 {
                             let wy = y0 + py;
                             if wy < 0 || wy >= CHUNK_H as i32 {
@@ -631,7 +640,8 @@ fn mesh_liquid(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32, id: u8)
             uvs[i] = tile_uv(b.tiles, tile, FACE_UVS[i][0], v);
         }
         let out = if translucent { &mut b.trans } else { &mut b.solid };
-        let color = [255u8, 255, 255, 255];
+        let wt = if id == WATER { inp.water[((z + 1) * P + (x + 1)) as usize] } else { 0xFFFFFF };
+        let color = [(wt >> 16) as u8, (wt >> 8) as u8, wt as u8, 255];
         Builder::quad(out, pos, uvs, color, [light; 4], false);
         if translucent && face == 3 {
             // underside of the water surface, visible from below
