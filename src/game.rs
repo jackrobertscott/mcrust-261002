@@ -2141,7 +2141,7 @@ impl Game {
             for _ in 0..20 {
                 let p = pos + v3(self.rng.uniform(-0.5, 0.5), self.rng.uniform(0.0, 1.0), self.rng.uniform(-0.5, 0.5));
                 let v = v3(self.rng.uniform(-0.03, 0.03), self.rng.uniform(0.0, 0.05), self.rng.uniform(-0.03, 0.03));
-                self.particles.push(Particle { pos: p, prev_pos: p, vel: v, age: 0, life: 20 + self.rng.range(10), size: 0.12, uv: [0.0; 4], color: [230, 230, 230, 255], gravity: -0.002, textured: false, emissive: false });
+                self.particles.push(Particle { pos: p, prev_pos: p, vel: v, age: 0, life: 20 + self.rng.range(10), size: 0.07 + self.rng.next_f32() * 0.05, uv: [0.0; 4], color: [235, 235, 235, 255], gravity: -0.002, textured: false, emissive: false });
             }
             self.rng.next_u64();
         }

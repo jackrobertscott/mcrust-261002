@@ -320,6 +320,16 @@ fn run_script(g: &mut Game, win: &mut Window, script: &str, t: f32) {
                 m.persistent = true;
                 g.mobs.push(m);
             }
+            Some("click") => {
+                let b: u8 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+                win.events.push(platform::Event::MouseDown(b));
+            }
+            Some("mobhp") => {
+                let hp: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(1.0);
+                for m in g.mobs.iter_mut().filter(|m| m.persistent) {
+                    m.health = hp;
+                }
+            }
             Some("lmb") => win.buttons[0] = parts.next() == Some("1"),
             Some("rmb") => win.buttons[1] = parts.next() == Some("1"),
             Some("key") => {

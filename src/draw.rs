@@ -569,7 +569,7 @@ impl Scene {
         for p in &g.particles {
             let pos = p.prev_pos.lerp(p.pos, alpha) - cam.pos;
             let (sky, blk) = Self::light_at(&g.world, p.pos);
-            let s = p.size * if p.emissive { 1.0 - (p.age as f32 / p.life as f32) * 0.5 } else { 1.0 };
+            let s = p.size * if p.textured { 1.0 } else { 1.0 - (p.age as f32 / p.life as f32) * 0.6 };
             let (a, b) = (right * s, up * s);
             let uv = if p.textured { particle_uv(r, p) } else { [0.5, 0.5, 0.5, 0.5] };
             let c = p.color;
