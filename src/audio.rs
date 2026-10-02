@@ -242,6 +242,7 @@ impl Audio {
         self.add("skeleton", (0..2).map(|_| rattle(&mut r)).collect());
         self.add("spider", (0..2).map(|_| hiss(&mut r, 0.5, 0.25)).collect());
         self.add("mobhurt", (0..2).map(|i| oof(260.0 + i as f32 * 30.0)).collect());
+        self.add("rain", (0..3).map(|_| rain_noise(&mut r)).collect());
         self.add("till", (0..2).map(|_| material_hit(&mut r, 3, 0.18, 0.8)).collect());
     }
 }
@@ -533,6 +534,28 @@ fn explosion(r: &mut Random) -> Vec<f32> {
         *v *= (-t / 0.45).exp() * (t * 200.0).min(1.0);
     }
     normalize(&mut s, 0.9);
+    s
+}
+
+fn rain_noise(r: &mut Random) -> Vec<f32> {
+    let n = (RATE * 1.6) as usize;
+    let mut s: Vec<f32> = (0..n).map(|_| r.uniform(-1.0, 1.0)).collect();
+    lowpass(&mut s, 2500.0);
+    highpass(&mut s, 400.0);
+    // droplets
+    for _ in 0..60 {
+        let at = r.range(n as i32 - 300) as usize;
+        let a = r.uniform(0.5, 1.5);
+        for k in 0..300 {
+            s[at + k] += r.uniform(-1.0, 1.0) * a * (-(k as f32) / 30.0).exp();
+        }
+    }
+    // fade in/out so overlapping copies blend into a continuous wash
+    for (i, v) in s.iter_mut().enumerate() {
+        let t = i as f32 / n as f32;
+        *v *= (t * std::f32::consts::PI).sin();
+    }
+    normalize(&mut s, 0.5);
     s
 }
 

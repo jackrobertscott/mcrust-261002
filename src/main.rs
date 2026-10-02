@@ -305,6 +305,12 @@ fn run_script(g: &mut Game, win: &mut Window, script: &str, t: f32) {
                 g.player.pitch = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
             }
             Some("time") => g.world.time = parts.next().and_then(|s| s.parse().ok()).unwrap_or(1000),
+            Some("rain") => {
+                g.raining = true;
+                g.rain = 1.0;
+                g.prev_rain = 1.0;
+                g.weather_timer = 99999;
+            }
             Some("f5") => g.third_person = (g.third_person + 1) % 3,
             Some("f3") => g.show_debug = !g.show_debug,
             Some("mob") => {

@@ -145,6 +145,8 @@ pub struct Renderer {
     pub font: Texture,
     pub glyph_w: [u32; 256],
     pub stars: Mesh,
+    pub rain_tex: Texture,
+    pub snow_tex: Texture,
     pub width: u32,
     pub height: u32,
     pub gui_scale: u32,
@@ -239,6 +241,33 @@ impl Renderer {
         let moon = Texture::from_image(&assets::mobs::get("moon").unwrap_or_else(|| Image::filled(32, 32, [200, 200, 200, 255])));
         let clouds_img = assets::mobs::get("clouds").unwrap_or_else(|| Image::new(256, 256));
         let white = Texture::from_image(&Image::filled(4, 4, [255, 255, 255, 255]));
+        // precipitation textures (vanilla-like streaks and flakes)
+        let mut rimg = Image::new(16, 128);
+        let mut rr = crate::image::Rng::new(77);
+        for _ in 0..7 {
+            let x = rr.range(16) as i32;
+            let y = rr.range(128) as i32;
+            let len = 8 + rr.range(12) as i32;
+            for k in 0..len {
+                let a = 60 + (k * 110 / len) as u8;
+                rimg.put(x, (y + k) % 128, [200, 215, 255, a]);
+            }
+        }
+        let rain_tex = Texture::from_image(&rimg);
+        rain_tex.set_repeat();
+        let mut simg = Image::new(16, 64);
+        for _ in 0..9 {
+            let x = rr.range(15) as i32;
+            let y = rr.range(63) as i32;
+            simg.put(x, y, [255, 255, 255, 230]);
+            if rr.range(2) == 0 {
+                simg.put(x + 1, y, [240, 240, 250, 200]);
+                simg.put(x, y + 1, [240, 240, 250, 200]);
+                simg.put(x + 1, y + 1, [230, 230, 240, 170]);
+            }
+        }
+        let snow_tex = Texture::from_image(&simg);
+        snow_tex.set_repeat();
 
         // ---- GUI atlas (shelf packing) ----
         let mut gui_imgs: Vec<(&'static str, Image)> = Vec::new();
@@ -304,6 +333,8 @@ impl Renderer {
             font,
             glyph_w,
             stars: Mesh::new(),
+            rain_tex,
+            snow_tex,
             width: 1,
             height: 1,
             gui_scale: 2,

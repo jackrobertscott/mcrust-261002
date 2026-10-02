@@ -227,7 +227,8 @@ impl Mob {
     }
 
     /// One game tick of AI + physics.
-    pub fn tick(&mut self, world: &World, player_pos: Vec3, player_alive: bool, skydark: f32, rng: &mut Random, events: &mut Vec<MobEvent>) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn tick(&mut self, world: &World, player_pos: Vec3, player_alive: bool, skydark: f32, raining: bool, rng: &mut Random, events: &mut Vec<MobEvent>) {
         self.prev_pos = self.body.pos;
         self.prev_yaw = self.yaw;
         self.prev_limb_amount = self.limb_amount;
@@ -257,7 +258,7 @@ impl Mob {
         }
 
         // Burning in daylight (undead)
-        if matches!(self.kind, MobKind::Zombie | MobKind::Skeleton) && skydark < 4.0 && !self.body.in_water && !self.persistent {
+        if matches!(self.kind, MobKind::Zombie | MobKind::Skeleton) && skydark < 4.0 && !raining && !self.body.in_water && !self.persistent {
             let (x, y, z) = self.eye().floor();
             if world.sky_light(x, y, z) == 15 && rng.chance(0.03) {
                 self.fire = self.fire.max(160);

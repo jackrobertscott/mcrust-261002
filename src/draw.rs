@@ -197,7 +197,17 @@ fn sky_colors(g: &Game, cam_pos: Vec3) -> ([f32; 3], [f32; 3], Option<[f32; 4]>,
         fog = [fog[0] * (1.0 - k) + col[0] * k, fog[1] * (1.0 - k) + col[1] * k, fog[2] * (1.0 - k) + col[2] * k];
         sunrise = Some(col);
     }
-    let star = ((1.0 - ((a * std::f32::consts::TAU).cos() * 2.0 + 0.25).clamp(0.0, 1.0)).powi(2)) * 0.5;
+    let star = ((1.0 - ((a * std::f32::consts::TAU).cos() * 2.0 + 0.25).clamp(0.0, 1.0)).powi(2)) * 0.5 * (1.0 - g.rain);
+    let mut sky = sky;
+    if g.rain > 0.0 {
+        let r = g.rain;
+        let gray = (sky[0] * 0.3 + sky[1] * 0.59 + sky[2] * 0.11) * 0.6;
+        for c in sky.iter_mut() {
+            *c = *c * (1.0 - r * 0.75) + gray * r * 0.75;
+        }
+        fog = [fog[0] * (1.0 - r * 0.5), fog[1] * (1.0 - r * 0.5), fog[2] * (1.0 - r * 0.4)];
+    }
+    let sunrise = if g.rain > 0.5 { None } else { sunrise };
     (sky, fog, sunrise, star)
 }
 
@@ -322,7 +332,13 @@ impl Scene {
         // ---- clouds ----
         if g.options.clouds && !underwater {
             let b = g.sky_brightness();
-            let cc = [b * 0.9 + 0.1, b * 0.9 + 0.1, b * 0.85 + 0.15];
+            let mut cc = [b * 0.9 + 0.1, b * 0.9 + 0.1, b * 0.85 + 0.15];
+            if g.rain > 0.0 {
+                let gray = (cc[0] * 0.3 + cc[1] * 0.59 + cc[2] * 0.11) * 0.6;
+                for c in cc.iter_mut() {
+                    *c = *c * (1.0 - g.rain * 0.95) + gray * g.rain * 0.95;
+                }
+            }
             let time = g.world.time as f64 + alpha as f64;
             r.draw_clouds(cam.pos, &mvp, time, cc, rd);
         }
@@ -340,9 +356,95 @@ impl Scene {
             gl::glEnable(gl::CULL_FACE);
         }
 
+        // ---- rain / snow ----
+        if !panorama || g.rain > 0.0 {
+            self.draw_weather(g, r, &cam, &mvp, alpha, fog, fog_range, skydark);
+        }
+
         // ---- first person hand ----
         if !panorama && g.third_person == 0 && !g.hide_hud && !g.player.dead {
             self.draw_hand(g, r, alpha, aspect, fog);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn draw_weather(&mut self, g: &Game, r: &mut Renderer, cam: &Camera, mvp: &Mat4, alpha: f32, fog: [f32; 3], fog_range: (f32, f32), skydark: f32) {
+        let strength = lerp(g.prev_rain, g.rain, alpha);
+        if strength <= 0.0 {
+            return;
+        }
+        let (cx, cy, cz) = cam.pos.floor();
+        let radius = 10;
+        let t = (g.world.time as f32 + alpha) / 20.0;
+        let mut rain_v: Vec<Vertex> = Vec::new();
+        let mut snow_v: Vec<Vertex> = Vec::new();
+        for dz in -radius..=radius {
+            for dx in -radius..=radius {
+                let d2 = dx * dx + dz * dz;
+                if d2 > radius * radius {
+                    continue;
+                }
+                let (x, z) = (cx + dx, cz + dz);
+                if !g.world.is_loaded(x, z) {
+                    continue;
+                }
+                let biome = g.world.biome(x, z);
+                if matches!(biome, crate::worldgen::Biome::Desert | crate::worldgen::Biome::Savanna) {
+                    continue;
+                }
+                let snow = biome.is_snowy() || (biome == crate::worldgen::Biome::Mountains && cy > 100);
+                let ground = g.world.surface_height(x, z);
+                let y0 = ground.max(cy - radius);
+                let y1 = (cy + radius).max(ground);
+                if y0 >= y1 {
+                    continue;
+                }
+                let centre = v3(x as f32 + 0.5 - cam.pos.x, 0.0, z as f32 + 0.5 - cam.pos.z);
+                let len = (centre.x * centre.x + centre.z * centre.z).sqrt().max(0.01);
+                // quad perpendicular to the view direction, 1 block wide
+                let (px, pz) = (-centre.z / len * 0.5, centre.x / len * 0.5);
+                let dist = len / radius as f32;
+                let a = ((1.0 - dist * dist) * 0.5 + 0.5) * strength * 0.8;
+                let l = g.world.light(x, y0.max(cy), z);
+                let light = [(l >> 4) * 17, (l & 15) * 17, 255, 0];
+                let (fy0, fy1) = (y0 as f32 - cam.pos.y, y1 as f32 - cam.pos.y);
+                let hash = ((x.wrapping_mul(3121) ^ z.wrapping_mul(45238971)) & 255) as f32 / 255.0;
+                let (scroll, uscroll, tile_h, out) = if snow {
+                    (t * 0.25 + hash, (t * 0.03 + hash).sin() * 0.3, 4.0, &mut snow_v)
+                } else {
+                    (t * 2.2 + hash * 3.0, hash, 8.0, &mut rain_v)
+                };
+                let v_top = fy1 / tile_h + scroll;
+                let v_bot = fy0 / tile_h + scroll;
+                let col = [255, 255, 255, (a * 255.0) as u8];
+                let mk = |p: [f32; 3], u: f32, v: f32| Vertex { pos: p, uv: [u, -v], color: col, light };
+                let (ax, az) = (centre.x - px, centre.z - pz);
+                let (bx, bz) = (centre.x + px, centre.z + pz);
+                let q = [
+                    mk([ax, fy0, az], uscroll, v_bot),
+                    mk([bx, fy0, bz], uscroll + 1.0, v_bot),
+                    mk([bx, fy1, bz], uscroll + 1.0, v_top),
+                    mk([ax, fy1, az], uscroll, v_top),
+                ];
+                out.extend_from_slice(&[q[0], q[1], q[2], q[0], q[2], q[3]]);
+            }
+        }
+        r.setup_world_shader(mvp, fog, fog_range, skydark);
+        r.world_shader.set_f("u_alpha_ref", 0.01);
+        unsafe {
+            gl::glEnable(gl::BLEND);
+            gl::glBlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+            gl::glDisable(gl::CULL_FACE);
+            gl::glDepthMask(0);
+        }
+        r.rain_tex.bind();
+        r.draw_stream(&rain_v);
+        r.snow_tex.bind();
+        r.draw_stream(&snow_v);
+        unsafe {
+            gl::glDepthMask(1);
+            gl::glEnable(gl::CULL_FACE);
+            gl::glDisable(gl::BLEND);
         }
     }
 

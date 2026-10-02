@@ -278,6 +278,10 @@ pub struct Game {
     pub confirm_delete: bool,
     pub was_in_water: bool,
     pub scroll_acc: f32,
+    pub raining: bool,
+    pub rain: f32,
+    pub prev_rain: f32,
+    pub weather_timer: i32,
 }
 
 pub const TITLE_SEED: u64 = 59;
@@ -360,6 +364,10 @@ impl Game {
             confirm_delete: false,
             was_in_water: false,
             scroll_acc: 0.0,
+            raining: false,
+            rain: 0.0,
+            prev_rain: 0.0,
+            weather_timer: 12000,
         }
     }
 
@@ -411,6 +419,10 @@ impl Game {
         self.spawned_chunks.clear();
         self.craft3 = [ItemStack::EMPTY; 9];
         self.target = Target::None;
+        self.raining = false;
+        self.rain = 0.0;
+        self.prev_rain = 0.0;
+        self.weather_timer = 12000;
     }
 
     pub fn open_saved_world(&mut self, folder: &str) -> bool {
@@ -703,6 +715,7 @@ impl Game {
         self.tick_arrows();
         self.particles.retain_mut(|p| p.tick(&self.world));
         self.tick_fluids();
+        self.tick_weather();
         self.random_ticks();
         self.tick_furnaces();
         self.spawn_mobs();
@@ -772,7 +785,33 @@ impl Game {
 
     pub fn sky_brightness(&self) -> f32 {
         let a = self.celestial();
-        ((a * std::f32::consts::TAU).cos() * 2.0 + 0.5).clamp(0.0, 1.0)
+        ((a * std::f32::consts::TAU).cos() * 2.0 + 0.5).clamp(0.0, 1.0) * (1.0 - self.rain * 5.0 / 16.0)
+    }
+
+    fn tick_weather(&mut self) {
+        self.weather_timer -= 1;
+        if self.weather_timer <= 0 {
+            self.raining = !self.raining;
+            self.weather_timer = if self.raining { 3000 + self.rng.range(9000) } else { 6000 + self.rng.range(30000) };
+        }
+        let target = if self.raining { 1.0 } else { 0.0 };
+        self.prev_rain = self.rain;
+        if self.rain < target {
+            self.rain = (self.rain + 0.01).min(1.0);
+        } else if self.rain > target {
+            self.rain = (self.rain - 0.01).max(0.0);
+        }
+        // rain sound when the player is near open sky in a wet biome
+        if self.rain > 0.1 && self.tick_count % 24 == 0 {
+            let (x, y, z) = self.player.eye().floor();
+            let biome = self.world.biome(x, z);
+            let dry = matches!(biome, Biome::Desert | Biome::Savanna);
+            if !dry && !biome.is_snowy() {
+                let exposed = self.world.surface_height(x, z) <= y + 8;
+                let vol = self.rain * if exposed { 0.35 } else { 0.08 };
+                self.sounds.push(SoundEvent { name: "rain", pos: None, volume: vol, pitch: 0.9 + self.rng.next_f32() * 0.2 });
+            }
+        }
     }
 
     fn tick_player(&mut self, win: &Window, playing: bool) {
@@ -2087,7 +2126,7 @@ impl Game {
                 continue;
             }
             let fuse_before = m.fuse;
-            m.tick(&self.world, ppos, alive && !peaceful, skydark, &mut self.rng, &mut events);
+            m.tick(&self.world, ppos, alive && !peaceful, skydark, self.rain > 0.2, &mut self.rng, &mut events);
             if m.alive() && self.rng.chance(1.0 / 240.0) {
                 amb.push((mob_sound(m.kind), m.body.pos));
             }
