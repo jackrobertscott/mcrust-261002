@@ -119,6 +119,8 @@ unsafe extern "C" {
     pub fn glDisableVertexAttribArray(idx: GLuint);
     pub fn glDrawArrays(mode: GLenum, first: GLint, count: GLsizei);
     pub fn glDrawElements(mode: GLenum, count: GLsizei, ty: GLenum, idx: *const c_void);
+    pub fn glReadPixels(x: GLint, y: GLint, w: GLsizei, h: GLsizei, format: GLenum, ty: GLenum, data: *mut c_void);
+    pub fn glFinish();
 }
 
 /// Vertex format shared by every mesh in the game.
@@ -138,6 +140,7 @@ pub const ATTR_UV: u32 = 1;
 pub const ATTR_COLOR: u32 = 2;
 pub const ATTR_LIGHT: u32 = 3;
 
+#[derive(Clone, Copy)]
 pub struct Shader {
     pub prog: GLuint,
 }
@@ -303,4 +306,22 @@ pub fn enable_vertex_attribs() {
             glEnableVertexAttribArray(i);
         }
     }
+}
+
+/// Read back the current framebuffer as an image (top row first).
+pub fn screenshot(w: u32, h: u32) -> crate::image::Image {
+    let mut px = vec![[0u8; 4]; (w * h) as usize];
+    unsafe {
+        glFinish();
+        glReadPixels(0, 0, w as i32, h as i32, RGBA, UNSIGNED_BYTE, px.as_mut_ptr() as *mut c_void);
+    }
+    let mut img = crate::image::Image::new(w as usize, h as usize);
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let mut c = px[(h as usize - 1 - y) * w as usize + x];
+            c[3] = 255;
+            img.data[y * w as usize + x] = c;
+        }
+    }
+    img
 }

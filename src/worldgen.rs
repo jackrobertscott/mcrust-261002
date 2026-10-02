@@ -645,7 +645,7 @@ impl Generator {
         // Leaves: two wide layers + two narrow
         for dy in -3..=0i32 {
             let ly = y + h + dy;
-            let rad = if dy >= -1 { 1 } else { 2 };
+            let rad: i32 = if dy >= -1 { 1 } else { 2 };
             for dx in -rad..=rad {
                 for dz in -rad..=rad {
                     let corner = dx.abs() == rad && dz.abs() == rad;
@@ -688,7 +688,7 @@ impl Generator {
     fn tree_spruce(&self, ch: &mut Chunk, x: i32, y: i32, z: i32, r: &mut Random) {
         let h = 7 + r.range(4);
         let leaf_start = 2 + r.range(2);
-        let mut rad = 0;
+        let mut rad: i32 = 0;
         let mut max_rad = 1;
         // From top down: cone of alternating radii
         Self::leaf(ch, x, y + h, z, SPRUCE_LEAVES);
@@ -726,7 +726,7 @@ impl Generator {
             Self::put(ch, px, y + i, pz, ACACIA_LOG, true);
         }
         let top = y + h;
-        for (rad, ly) in [(3, top - 1), (2, top)] {
+        for (rad, ly) in [(3i32, top - 1), (2i32, top)] {
             for ox in -rad..=rad {
                 for oz in -rad..=rad {
                     if ox.abs() == rad && oz.abs() == rad {
@@ -804,13 +804,13 @@ impl Generator {
 }
 
 /// Used by the game to pick a spawn point.
-pub fn find_spawn(gen: &Generator) -> (i32, i32, i32) {
+pub fn find_spawn(generator: &Generator) -> (i32, i32, i32) {
     for r in 0..200 {
         for i in 0..8 {
             let a = i as f32 / 8.0 * std::f32::consts::TAU;
             let x = (a.cos() * r as f32 * 16.0) as i32;
             let z = (a.sin() * r as f32 * 16.0) as i32;
-            let c = gen.column(x, z);
+            let c = generator.column(x, z);
             if c.height > SEA_LEVEL && !c.biome.is_ocean() && c.biome != Biome::River && c.height < SEA_LEVEL + 20 {
                 return (x, c.height + 1, z);
             }

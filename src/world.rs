@@ -208,7 +208,7 @@ pub enum BlockEntity {
 
 pub struct World {
     pub chunks: HashMap<(i32, i32), Box<Chunk>>,
-    pub gen: Arc<Generator>,
+    pub generator: Arc<Generator>,
     pub seed: u64,
     pending: HashSet<(i32, i32)>,
     job_tx: Sender<(i32, i32)>,
@@ -222,7 +222,7 @@ pub struct World {
 
 impl World {
     pub fn new(seed: u64) -> World {
-        let gen = Arc::new(Generator::new(seed));
+        let generator = Arc::new(Generator::new(seed));
         let (job_tx, job_rx) = channel::<(i32, i32)>();
         let (result_tx, result_rx) = channel::<Chunk>();
         let job_rx = Arc::new(Mutex::new(job_rx));
@@ -230,7 +230,7 @@ impl World {
         for _ in 0..threads {
             let rx = job_rx.clone();
             let tx = result_tx.clone();
-            let g = gen.clone();
+            let g = generator.clone();
             std::thread::spawn(move || loop {
                 let job = {
                     let lock = rx.lock().unwrap();
@@ -246,7 +246,7 @@ impl World {
         }
         World {
             chunks: HashMap::new(),
-            gen,
+            generator,
             seed,
             pending: HashSet::new(),
             job_tx,

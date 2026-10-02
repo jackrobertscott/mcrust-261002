@@ -27,3 +27,21 @@ pub fn dump_all(dir: &str) {
         }
     }
 }
+
+/// Build a contact sheet of all 16x16 block and item textures (scaled x4).
+pub fn contact_sheet(path: &str) {
+    let mut all: Vec<Image> = Vec::new();
+    for n in blocks::NAMES {
+        if let Some(i) = blocks::get(n) { all.push(i); }
+    }
+    for n in items::NAMES {
+        if let Some(i) = items::get(n) { all.push(i); }
+    }
+    let cols = 16;
+    let rows = all.len().div_ceil(cols);
+    let mut sheet = Image::filled(cols * 18, rows * 18, [60, 60, 70, 255]);
+    for (k, img) in all.iter().enumerate() {
+        sheet.blend(img, (k % cols * 18 + 1) as i32, (k / cols * 18 + 1) as i32);
+    }
+    let _ = sheet.scaled(3).save_png(path);
+}

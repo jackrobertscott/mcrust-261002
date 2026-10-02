@@ -93,7 +93,7 @@ pub enum Layer {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tool {
-    None,
+    Any,
     Pickaxe,
     Axe,
     Shovel,
@@ -165,7 +165,7 @@ const fn plant(name: &'static str, t: &'static str, tint: Tint) -> BlockDef {
         light_emit: 0,
         light_opacity: 0,
         hardness: 0.0,
-        tool: Tool::None,
+        tool: Tool::Any,
         tier: 0,
         tint,
         replaceable: false,
@@ -183,7 +183,7 @@ const fn leaves(name: &'static str, t: &'static str, tint: Tint) -> BlockDef {
 use Tool::*;
 
 pub static BLOCKS: [BlockDef; NUM_BLOCKS] = {
-    let mut air = cube("Air", "stone", 0.0, None, 0);
+    let mut air = cube("Air", "stone", 0.0, Any, 0);
     air.shape = Shape::None;
     air.solid = false;
     air.opaque = false;
@@ -193,7 +193,7 @@ pub static BLOCKS: [BlockDef; NUM_BLOCKS] = {
     let mut grass = cube3("Grass Block", "grass_top", "dirt", "dirt", 0.6, Shovel, 0);
     grass.tint = Tint::Grass;
 
-    let mut water = cube("Water", "water_still", 100.0, None, 0);
+    let mut water = cube("Water", "water_still", 100.0, Any, 0);
     water.shape = Shape::Liquid;
     water.layer = Layer::Translucent;
     water.solid = false;
@@ -208,7 +208,7 @@ pub static BLOCKS: [BlockDef; NUM_BLOCKS] = {
     lava.light_emit = 15;
     lava.light_opacity = 15;
 
-    let mut glass = cube("Glass", "glass", 0.3, None, 0);
+    let mut glass = cube("Glass", "glass", 0.3, Any, 0);
     glass.layer = Layer::Cutout;
     glass.opaque = false;
     glass.light_opacity = 0;
@@ -245,7 +245,7 @@ pub static BLOCKS: [BlockDef; NUM_BLOCKS] = {
     let mut dead_bush = plant("Dead Bush", "dead_bush", Tint::None);
     dead_bush.replaceable = true;
 
-    let mut cactus = cube3("Cactus", "cactus_top", "cactus_bottom", "cactus_side", 0.4, None, 0);
+    let mut cactus = cube3("Cactus", "cactus_top", "cactus_bottom", "cactus_side", 0.4, Any, 0);
     cactus.shape = Shape::Cactus;
     cactus.opaque = false;
     cactus.light_opacity = 0;
@@ -266,7 +266,7 @@ pub static BLOCKS: [BlockDef; NUM_BLOCKS] = {
     let mut pumpkin = cube3("Pumpkin", "pumpkin_top", "pumpkin_top", "pumpkin_side", 1.0, Axe, 0);
     pumpkin.front = Some("pumpkin_side");
 
-    let mut bedrock = cube("Bedrock", "bedrock", -1.0, None, 0);
+    let mut bedrock = cube("Bedrock", "bedrock", -1.0, Any, 0);
     bedrock.hardness = -1.0;
 
     [
@@ -303,13 +303,13 @@ pub static BLOCKS: [BlockDef; NUM_BLOCKS] = {
         leaves("Acacia Leaves", "acacia_leaves", Tint::Foliage),
         glass,
         cube3("Sandstone", "sandstone_top", "sandstone_bottom", "sandstone_side", 0.8, Pickaxe, 1),
-        cube("White Wool", "white_wool", 0.8, None, 0),
+        cube("White Wool", "white_wool", 0.8, Any, 0),
         cube("Block of Gold", "gold_block", 3.0, Pickaxe, 3),
         cube("Block of Iron", "iron_block", 5.0, Pickaxe, 2),
         cube("Block of Diamond", "diamond_block", 5.0, Pickaxe, 3),
         cube("Block of Coal", "coal_block", 5.0, Pickaxe, 1),
         cube("Bricks", "bricks", 2.0, Pickaxe, 1),
-        cube3("TNT", "tnt_top", "tnt_bottom", "tnt_side", 0.0, None, 0),
+        cube3("TNT", "tnt_top", "tnt_bottom", "tnt_side", 0.0, Any, 0),
         cube3("Bookshelf", "oak_planks", "oak_planks", "bookshelf", 1.5, Axe, 0),
         cube("Mossy Cobblestone", "mossy_cobblestone", 2.0, Pickaxe, 1),
         cube("Obsidian", "obsidian", 50.0, Pickaxe, 4),
