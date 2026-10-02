@@ -88,9 +88,14 @@ Command-line extras:
   - 3D clouds and biome-tinted grass and leaves.
   - Weather: rain, and snow in cold biomes, which darkens the sky and has its own sound.
   - Translucent water that flows and slopes.
+  - Mipmapped textures (nearest-texel, like vanilla) so distant terrain doesn't shimmer;
+    cut-out textures keep their coverage, so far-off leaves and grass stay the right
+    density.
 - **Survival:**
   - Health, hunger and saturation, plus fall, drowning, lava and cactus damage.
-  - Breaking blocks takes time depending on the tool, with crack animation and particles.
+  - Breaking blocks takes time depending on the tool, with a vanilla-style crack overlay
+    (carved, shaded cracks that spread out from the centre) and debris particles that
+    fly, fall and settle on the ground.
   - Harvest levels (e.g. iron ore needs a stone pickaxe) and tool durability.
 - **Crafting:** 2x2 in the inventory and 3x3 at the crafting table. Recipes include planks,
   sticks, torches, crafting table, furnace, chest, all 25 tools (wood, stone, iron, gold,

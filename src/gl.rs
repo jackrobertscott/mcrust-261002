@@ -229,6 +229,27 @@ impl Texture {
         }
         Texture { id, w: img.w as u32, h: img.h as u32 }
     }
+    /// Upload a full mipmap chain (level 0 first) and sample it the way
+    /// vanilla does: nearest texels, blended between mip levels.
+    pub fn from_mips(levels: &[crate::image::Image]) -> Texture {
+        let t = Texture::from_image(&levels[0]);
+        unsafe {
+            for (l, img) in levels.iter().enumerate().skip(1) {
+                glTexImage2D(TEXTURE_2D, l as GLint, RGBA as i32, img.w as i32, img.h as i32, 0, RGBA, UNSIGNED_BYTE, img.data.as_ptr() as *const c_void);
+            }
+            glTexParameteri(TEXTURE_2D, TEXTURE_MAX_LEVEL, levels.len() as i32 - 1);
+            glTexParameteri(TEXTURE_2D, TEXTURE_MIN_FILTER, NEAREST_MIPMAP_LINEAR);
+        }
+        t
+    }
+    /// Switch minification between the mip chain (3D world) and the full-size
+    /// level only (GUI icons, which vanilla also draws without mipmaps).
+    pub fn set_mipmapped(&self, on: bool) {
+        unsafe {
+            glBindTexture(TEXTURE_2D, self.id);
+            glTexParameteri(TEXTURE_2D, TEXTURE_MIN_FILTER, if on { NEAREST_MIPMAP_LINEAR } else { NEAREST });
+        }
+    }
     pub fn set_repeat(&self) {
         unsafe {
             glBindTexture(TEXTURE_2D, self.id);

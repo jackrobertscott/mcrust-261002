@@ -32,6 +32,7 @@ impl Ui {
         self.h = (r.height as f32 / self.scale).ceil();
         self.mouse_x = mouse_px.0 / self.scale;
         self.mouse_y = mouse_px.1 / self.scale;
+        r.block_atlas.set_mipmapped(false);
         let s = &r.gui_shader;
         s.bind();
         let m = Mat4::ortho(0.0, r.width as f32 / self.scale, r.height as f32 / self.scale, 0.0, -100.0, 100.0);

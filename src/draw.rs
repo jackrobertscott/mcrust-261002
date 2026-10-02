@@ -280,6 +280,7 @@ impl Scene {
 
     /// Render the 3D world (used both in-game and for the title panorama).
     pub fn draw_world(&mut self, g: &Game, r: &mut Renderer, alpha: f32, panorama: bool) {
+        r.block_atlas.set_mipmapped(true);
         let aspect = r.width as f32 / r.height.max(1) as f32;
         let cam = self.camera(g, aspect, alpha, panorama);
         let (sky, mut fog, sunrise, star) = sky_colors(g, cam.pos);
@@ -582,7 +583,12 @@ impl Scene {
                 let m = if cube {
                     arm_m * Mat4::translate(-1.0 / 16.0, 10.0 / 16.0, -2.0 / 16.0) * Mat4::rot_x(-0.4) * Mat4::rot_y(0.785) * Mat4::scale(0.375, -0.375, 0.375) * Mat4::translate(-0.5, -0.5, -0.5)
                 } else {
-                    arm_m * Mat4::translate(-1.0 / 16.0, 10.0 / 16.0, -1.0 / 16.0) * Mat4::rot_x(-1.5708) * Mat4::rot_y(1.5708) * Mat4::rot_z(0.785) * Mat4::scale(0.6, -0.6, 0.6) * Mat4::translate(-0.5, -0.2, 0.0)
+                    // Sprite plane facing sideways, upright; a tool's diagonal blade
+                    // then points forward and up out of the fist, gripped at the
+                    // hilt. Vanilla third-person scales: tools 0.85, other items 0.55.
+                    let handheld = item::tool_info(held.id).is_some() || held.id == item::STICK || held.id == item::BONE || held.id == item::BOW;
+                    let (sc, grip) = if handheld { (0.85, (-0.19, -0.19)) } else { (0.55, (-0.5, -0.2)) };
+                    arm_m * Mat4::translate(-1.0 / 16.0, 10.0 / 16.0, -1.0 / 16.0) * Mat4::rot_y(std::f32::consts::FRAC_PI_2) * Mat4::scale(sc, -sc, sc) * Mat4::translate(grip.0, grip.1, 0.0)
                 };
                 let (mv, atlas) = self.items.get(r, held.id).clone();
                 verts.clear();

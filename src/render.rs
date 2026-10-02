@@ -169,6 +169,76 @@ fn pack_tiles(names: &[(String, Image)]) -> (Image, HashMap<String, u16>) {
     (img, map)
 }
 
+/// Mipmaps for a tile atlas, each level box-filtered from the full-size image.
+/// Colour is alpha-weighted, so transparent texels add no dark fringes. Cut-out
+/// tiles (leaves, plants, torches, cracks) get their alpha re-thresholded so
+/// every level keeps the tile's opaque coverage: foliage neither thins out nor
+/// swells into blobs in the distance.
+pub fn build_mips(base: &Image, tile: usize, levels: usize) -> Vec<Image> {
+    let (tw, th) = (base.w / tile, base.h / tile);
+    let mut coverage = vec![None; tw * th];
+    for ty in 0..th {
+        for tx in 0..tw {
+            let (mut opaque, mut binary) = (0, true);
+            for y in 0..tile {
+                for x in 0..tile {
+                    let a = base.get(tx * tile + x, ty * tile + y)[3];
+                    opaque += (a >= 128) as usize;
+                    binary &= a == 0 || a == 255;
+                }
+            }
+            if binary && opaque < tile * tile {
+                coverage[ty * tw + tx] = Some(opaque as f32 / (tile * tile) as f32);
+            }
+        }
+    }
+    let mut out = vec![base.clone()];
+    for l in 1..=levels {
+        let b = 1usize << l;
+        let mut img = Image::new(base.w / b, base.h / b);
+        for y in 0..img.h {
+            for x in 0..img.w {
+                let (mut rgb, mut plain, mut asum) = ([0.0f32; 3], [0.0f32; 3], 0.0f32);
+                for yy in 0..b {
+                    for xx in 0..b {
+                        let c = base.get(x * b + xx, y * b + yy);
+                        let a = c[3] as f32 / 255.0;
+                        for k in 0..3 {
+                            rgb[k] += c[k] as f32 * a;
+                            plain[k] += c[k] as f32;
+                        }
+                        asum += a;
+                    }
+                }
+                let n = (b * b) as f32;
+                let c = |k: usize| (if asum > 0.0 { rgb[k] / asum } else { plain[k] / n }).round() as u8;
+                img.set(x, y, [c(0), c(1), c(2), (asum / n * 255.0).round() as u8]);
+            }
+        }
+        let m = tile >> l;
+        for ty in 0..th {
+            for tx in 0..tw {
+                let Some(cov) = coverage[ty * tw + tx] else { continue };
+                let mut px: Vec<(u8, usize, usize)> = Vec::with_capacity(m * m);
+                for y in 0..m {
+                    for x in 0..m {
+                        px.push((img.get(tx * m + x, ty * m + y)[3], tx * m + x, ty * m + y));
+                    }
+                }
+                px.sort_by_key(|p| std::cmp::Reverse(p.0));
+                let keep = (cov * (m * m) as f32).round() as usize;
+                for (i, &(a, x, y)) in px.iter().enumerate() {
+                    let mut c = img.get(x, y);
+                    c[3] = if i < keep && a > 0 { 255 } else { 0 };
+                    img.set(x, y, c);
+                }
+            }
+        }
+        out.push(img);
+    }
+    out
+}
+
 impl Renderer {
     pub fn new() -> Renderer {
         let world_shader = Shader::new(WORLD_VS, WORLD_FS);
@@ -182,7 +252,7 @@ impl Renderer {
             }
         }
         let (block_atlas_img, block_tile) = pack_tiles(&list);
-        let block_atlas = Texture::from_image(&block_atlas_img);
+        let block_atlas = Texture::from_mips(&build_mips(&block_atlas_img, 16, 4));
         let t = |n: &str| -> u16 { *block_tile.get(n).unwrap_or_else(|| block_tile.get("stone").unwrap()) };
         let mut blocks = vec![[0u16; 4]; NUM_BLOCKS];
         for (i, d) in block::BLOCKS.iter().enumerate() {
@@ -501,6 +571,11 @@ impl Renderer {
         if !translucent {
             self.chunks_rendered = list.len();
         }
+        // Cut-out mip levels are binary with matching coverage; a mid threshold
+        // keeps the blend between two levels from fattening leaves and grass.
+        if !translucent {
+            s.set_f("u_alpha_ref", 0.5);
+        }
         for (_, key) in list {
             let m = &self.sections[&key];
             let (cx, sy, cz) = key;
@@ -512,6 +587,9 @@ impl Renderer {
             }
         }
         s.set_v3("u_offset", [0.0; 3]);
+        if !translucent {
+            s.set_f("u_alpha_ref", 0.1);
+        }
     }
 
     /// Upload vertices to the stream buffer and draw them with the current shader.
