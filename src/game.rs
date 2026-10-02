@@ -1512,6 +1512,7 @@ impl Game {
                     one(GRAVEL as u16)
                 }
             }
+            SHORT_GRASS | FERN if self.player.inv.held().id == item::SHEARS => one(b as u16),
             SHORT_GRASS | FERN => {
                 if r.chance(0.125) {
                     one(item::WHEAT_SEEDS)
@@ -1534,7 +1535,6 @@ impl Game {
                 }
             }
             OAK_LEAVES | BIRCH_LEAVES | SPRUCE_LEAVES | JUNGLE_LEAVES | ACACIA_LEAVES if self.player.inv.held().id == item::SHEARS => one(b as u16),
-            SHORT_GRASS | FERN if self.player.inv.held().id == item::SHEARS => one(b as u16),
             OAK_LEAVES | BIRCH_LEAVES | SPRUCE_LEAVES | JUNGLE_LEAVES | ACACIA_LEAVES => {
                 let mut v = vec![];
                 let sap = match b {
