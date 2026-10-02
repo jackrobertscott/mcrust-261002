@@ -105,6 +105,34 @@ pub fn block_boxes(world: &World, area: &Aabb) -> Vec<Aabb> {
                     continue;
                 }
                 let b = world.get(x, y, z);
+                let mk = |mn: [f32; 3], mx: [f32; 3]| Aabb::new(v3(x as f32 + mn[0], y as f32 + mn[1], z as f32 + mn[2]), v3(x as f32 + mx[0], y as f32 + mx[1], z as f32 + mx[2]));
+                match block::def(b).shape {
+                    block::Shape::Door => {
+                        let (mn, mx) = block::door_box(world.get_meta(x, y, z));
+                        out.push(mk(mn, mx));
+                        continue;
+                    }
+                    block::Shape::Ladder => {
+                        let (mn, mx) = block::ladder_box(world.get_meta(x, y, z));
+                        out.push(mk(mn, mx));
+                        continue;
+                    }
+                    block::Shape::Bed => {
+                        out.push(mk([0.0; 3], [1.0, 9.0 / 16.0, 1.0]));
+                        continue;
+                    }
+                    block::Shape::Fence => {
+                        let (mut x0, mut x1, mut z0, mut z1) = (0.375f32, 0.625f32, 0.375f32, 0.625f32);
+                        if block::fence_connects(world.get(x - 1, y, z)) { x0 = 0.0; }
+                        if block::fence_connects(world.get(x + 1, y, z)) { x1 = 1.0; }
+                        if block::fence_connects(world.get(x, y, z - 1)) { z0 = 0.0; }
+                        if block::fence_connects(world.get(x, y, z + 1)) { z1 = 1.0; }
+                        out.push(mk([x0, 0.0, 0.375], [x1, 1.5, 0.625]));
+                        out.push(mk([0.375, 0.0, z0], [0.625, 1.5, z1]));
+                        continue;
+                    }
+                    _ => {}
+                }
                 if let Some((mn, mx)) = block::collision_box(b) {
                     out.push(Aabb::new(
                         v3(x as f32 + mn[0], y as f32 + mn[1], z as f32 + mn[2]),

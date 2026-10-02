@@ -71,7 +71,11 @@ pub const BIRCH_SAPLING: u8 = 64;
 pub const SPRUCE_SAPLING: u8 = 65;
 pub const JUNGLE_SAPLING: u8 = 66;
 pub const ACACIA_SAPLING: u8 = 67;
-pub const NUM_BLOCKS: usize = 68;
+pub const OAK_DOOR: u8 = 68;
+pub const LADDER: u8 = 69;
+pub const OAK_FENCE: u8 = 70;
+pub const BED: u8 = 71;
+pub const NUM_BLOCKS: usize = 72;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Shape {
@@ -87,6 +91,10 @@ pub enum Shape {
     Cactus,
     /// Farmland: 15/16 high.
     Farmland,
+    Door,
+    Ladder,
+    Fence,
+    Bed,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -271,6 +279,26 @@ pub static BLOCKS: [BlockDef; NUM_BLOCKS] = {
     let mut pumpkin = cube3("Pumpkin", "pumpkin_top", "pumpkin_top", "pumpkin_side", 1.0, Axe, 0);
     pumpkin.front = Some("pumpkin_side");
 
+    let mut door = cube3("Oak Door", "oak_door_top", "oak_door_bottom", "oak_door_bottom", 3.0, Axe, 0);
+    door.shape = Shape::Door;
+    door.opaque = false;
+    door.light_opacity = 0;
+    door.layer = Layer::Cutout;
+    let mut ladder = cube("Ladder", "ladder", 0.4, Axe, 0);
+    ladder.shape = Shape::Ladder;
+    ladder.opaque = false;
+    ladder.light_opacity = 0;
+    ladder.layer = Layer::Cutout;
+    let mut fence = cube("Oak Fence", "oak_planks", 2.0, Axe, 0);
+    fence.shape = Shape::Fence;
+    fence.opaque = false;
+    fence.light_opacity = 0;
+    let mut bed = cube3("Bed", "bed_head_top", "oak_planks", "bed_head_side", 0.2, Any, 0);
+    bed.shape = Shape::Bed;
+    bed.opaque = false;
+    bed.light_opacity = 0;
+    bed.layer = Layer::Cutout;
+
     let mut bedrock = cube("Bedrock", "bedrock", -1.0, Any, 0);
     bedrock.hardness = -1.0;
 
@@ -343,6 +371,10 @@ pub static BLOCKS: [BlockDef; NUM_BLOCKS] = {
         plant("Spruce Sapling", "spruce_sapling", Tint::None),
         plant("Jungle Sapling", "jungle_sapling", Tint::None),
         plant("Acacia Sapling", "acacia_sapling", Tint::None),
+        door,
+        ladder,
+        fence,
+        bed,
     ]
 };
 
@@ -412,6 +444,10 @@ pub fn selection_box(id: BlockId, meta: u8) -> ([f32; 3], [f32; 3]) {
             _ => ([6.0 * p, 0.0, 6.0 * p], [10.0 * p, 10.0 * p, 10.0 * p]),
         },
         Shape::Layer => ([0.0; 3], [1.0, 2.0 * p, 1.0]),
+        Shape::Door => door_box(meta),
+        Shape::Ladder => ladder_box(meta),
+        Shape::Fence => ([0.375, 0.0, 0.375], [0.625, 1.0, 0.625]),
+        Shape::Bed => ([0.0; 3], [1.0, 9.0 * p, 1.0]),
         Shape::Cactus => ([p, 0.0, p], [15.0 * p, 1.0, 15.0 * p]),
         Shape::Farmland => ([0.0; 3], [1.0, 15.0 * p, 1.0]),
         _ => {
@@ -422,4 +458,61 @@ pub fn selection_box(id: BlockId, meta: u8) -> ([f32; 3], [f32; 3]) {
             }
         }
     }
+}
+
+// ---- doors / ladders / beds ----
+// Door meta: bits 0-1 facing (0 N,1 S,2 W,3 E: the direction the placer faced), bit 2 open, bit 3 upper half.
+// Ladder meta: side of the ladder block where the supporting wall is (0 -z, 1 +z, 2 -x, 3 +x).
+// Bed meta: bits 0-1 facing (direction from foot to head), bit 2 head part.
+
+/// Thin panel box for a facing (panel sits on the side opposite the facing, like vanilla).
+pub fn panel_box(facing: u8, t: f32) -> ([f32; 3], [f32; 3]) {
+    match facing & 3 {
+        0 => ([0.0, 0.0, 1.0 - t], [1.0, 1.0, 1.0]), // facing north -> panel on south side
+        1 => ([0.0, 0.0, 0.0], [1.0, 1.0, t]),       // facing south -> north side
+        2 => ([1.0 - t, 0.0, 0.0], [1.0, 1.0, 1.0]), // facing west -> east side
+        _ => ([0.0, 0.0, 0.0], [t, 1.0, 1.0]),       // facing east -> west side
+    }
+}
+
+/// Rotate a facing clockwise (N->E->S->W).
+pub fn rotate_cw(f: u8) -> u8 {
+    match f & 3 {
+        0 => 3,
+        3 => 1,
+        1 => 2,
+        _ => 0,
+    }
+}
+
+pub fn door_box(meta: u8) -> ([f32; 3], [f32; 3]) {
+    let facing = meta & 3;
+    let open = meta & 4 != 0;
+    let f = if open { rotate_cw(facing) } else { facing };
+    panel_box(f, 3.0 / 16.0)
+}
+
+pub fn ladder_box(meta: u8) -> ([f32; 3], [f32; 3]) {
+    let t = 3.0 / 16.0;
+    match meta & 3 {
+        0 => ([0.0, 0.0, 0.0], [1.0, 1.0, t]),
+        1 => ([0.0, 0.0, 1.0 - t], [1.0, 1.0, 1.0]),
+        2 => ([0.0, 0.0, 0.0], [t, 1.0, 1.0]),
+        _ => ([1.0 - t, 0.0, 0.0], [1.0, 1.0, 1.0]),
+    }
+}
+
+/// Facing direction as a (dx, dz) step.
+pub fn facing_step(f: u8) -> (i32, i32) {
+    match f & 3 {
+        0 => (0, -1),
+        1 => (0, 1),
+        2 => (-1, 0),
+        _ => (1, 0),
+    }
+}
+
+/// Does a fence at some position connect to this neighbour block?
+pub fn fence_connects(b: BlockId) -> bool {
+    b == OAK_FENCE || is_opaque(b)
 }

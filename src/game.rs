@@ -160,6 +160,8 @@ pub struct Player {
     pub limb_amount: f32,
     pub body_yaw: f32,
     pub bow_charge: i32,
+    pub sleeping: i32,
+    pub on_ladder: bool,
 }
 
 impl Player {
@@ -207,10 +209,18 @@ impl Player {
             limb_amount: 0.0,
             body_yaw: 0.0,
             bow_charge: 0,
+            sleeping: 0,
+            on_ladder: false,
         }
     }
     pub fn eye_height(&self) -> f32 {
-        if self.sneaking { 1.54 } else { 1.62 }
+        if self.sleeping > 0 {
+            0.3
+        } else if self.sneaking {
+            1.54
+        } else {
+            1.62
+        }
     }
     pub fn eye(&self) -> Vec3 {
         self.body.pos + v3(0.0, self.eye_height(), 0.0)
@@ -282,6 +292,7 @@ pub struct Game {
     pub rain: f32,
     pub prev_rain: f32,
     pub weather_timer: i32,
+    pub action_msg: Option<(String, i32)>,
 }
 
 pub const TITLE_SEED: u64 = 59;
@@ -368,7 +379,26 @@ impl Game {
             rain: 0.0,
             prev_rain: 0.0,
             weather_timer: 12000,
+            action_msg: None,
         }
+    }
+
+    /// Horizontal direction the player is looking: 0 N(-z), 1 S(+z), 2 W(-x), 3 E(+x).
+    pub fn player_facing(&self) -> u8 {
+        let yaw = crate::math::wrap_deg(self.player.yaw);
+        if (-45.0..45.0).contains(&yaw) {
+            1
+        } else if (45.0..135.0).contains(&yaw) {
+            2
+        } else if (-135.0..-45.0).contains(&yaw) {
+            3
+        } else {
+            0
+        }
+    }
+
+    pub fn message(&mut self, m: &str) {
+        self.action_msg = Some((m.to_string(), 60));
     }
 
     pub fn sound(&mut self, name: &'static str, pos: Option<Vec3>, volume: f32) {
@@ -704,6 +734,25 @@ impl Game {
         if self.held_name_timer > 0 {
             self.held_name_timer -= 1;
         }
+        if let Some((_, t)) = &mut self.action_msg {
+            *t -= 1;
+            if *t <= 0 {
+                self.action_msg = None;
+            }
+        }
+        if self.player.sleeping > 0 {
+            self.player.sleeping += 1;
+            if self.player.sleeping >= 100 {
+                self.player.sleeping = 0;
+                let day = self.world.time.div_euclid(24000) + 1;
+                self.world.time = day * 24000;
+                self.raining = false;
+                self.rain = 0.0;
+                self.prev_rain = 0.0;
+                self.weather_timer = 6000 + self.rng.range(30000);
+                self.save();
+            }
+        }
         if self.screen_shake > 0.0 {
             self.screen_shake = (self.screen_shake - 0.1).max(0.0);
         }
@@ -860,6 +909,9 @@ impl Game {
             p.death_time += 1;
             return;
         }
+        if p.sleeping > 0 {
+            return;
+        }
 
         // ---- movement input ----
         let (mut fwd, mut strafe, mut jump) = (0.0f32, 0.0f32, false);
@@ -908,6 +960,23 @@ impl Game {
         let yaw_r = p.yaw.to_radians();
         let (s, c) = yaw_r.sin_cos();
         let world = &self.world;
+        // ladders
+        p.on_ladder = {
+            let bb = p.body.aabb();
+            let (x0, y0, z0) = bb.min.floor();
+            let (x1, y1, z1) = bb.max.floor();
+            let mut on = false;
+            for y in y0..=y1 {
+                for z in z0..=z1 {
+                    for x in x0..=x1 {
+                        if world.get(x, y, z) == LADDER {
+                            on = true;
+                        }
+                    }
+                }
+            }
+            on
+        };
         let was_on_ground = p.body.on_ground;
         let b = &mut p.body;
         let move_relative = |b: &mut Body, accel: f32| {
@@ -955,8 +1024,20 @@ impl Game {
                 }
             }
             move_relative(b, accel);
+            if p.on_ladder {
+                b.vel.x = b.vel.x.clamp(-0.15, 0.15);
+                b.vel.z = b.vel.z.clamp(-0.15, 0.15);
+                b.vel.y = b.vel.y.max(-0.15);
+                b.fall_distance = 0.0;
+                if sneak && b.vel.y < 0.0 {
+                    b.vel.y = 0.0;
+                }
+            }
             let v = b.vel;
             landed = b.move_by(world, v, sneak);
+            if p.on_ladder && (b.collided_h || jump) {
+                b.vel.y = 0.2;
+            }
             b.vel.y = (b.vel.y - 0.08) * 0.98;
             b.vel.x *= friction;
             b.vel.z *= friction;
@@ -1379,6 +1460,19 @@ impl Game {
         }
         let replacement = if b == ICE && by_player && self.world.get(x, y - 1, z) != AIR { WATER } else { AIR };
         self.set_block_updated(x, y, z, replacement, 0);
+        // remove the other half of doors / beds
+        if b == OAK_DOOR {
+            let oy = if meta & 8 != 0 { y - 1 } else { y + 1 };
+            if self.world.get(x, oy, z) == OAK_DOOR {
+                self.set_block_updated(x, oy, z, AIR, 0);
+            }
+        } else if b == BED {
+            let (dx, dz) = block::facing_step(meta & 3);
+            let (ox, oz) = if meta & 4 != 0 { (x - dx, z - dz) } else { (x + dx, z + dz) };
+            if self.world.get(ox, y, oz) == BED {
+                self.set_block_updated(ox, y, oz, AIR, 0);
+            }
+        }
     }
 
     pub fn block_drops(&mut self, b: u8, meta: u8) -> Vec<ItemStack> {
@@ -1450,6 +1544,8 @@ impl Game {
             CLAY => one(CLAY as u16),
             BOOKSHELF => vec![ItemStack::new(item::PAPER, 3)],
             FURNACE_LIT => one(FURNACE as u16),
+            OAK_DOOR => one(item::OAK_DOOR_ITEM),
+            BED => one(item::BED_ITEM),
             BEDROCK => vec![],
             _ => one(b as u16),
         }
@@ -1502,6 +1598,26 @@ impl Game {
             };
             if !ok {
                 self.break_block(x, y, z, false);
+            }
+        }
+        if b == OAK_DOOR {
+            let meta = self.world.get_meta(x, y, z);
+            if meta & 8 == 0 && !block::is_opaque(self.world.get(x, y - 1, z)) {
+                self.break_block(x, y, z, false);
+                return;
+            }
+        }
+        if b == LADDER {
+            let meta = self.world.get_meta(x, y, z);
+            let (wx, wz) = match meta & 3 {
+                0 => (x, z - 1),
+                1 => (x, z + 1),
+                2 => (x - 1, z),
+                _ => (x + 1, z),
+            };
+            if !block::is_opaque(self.world.get(wx, y, wz)) {
+                self.break_block(x, y, z, false);
+                return;
             }
         }
         if b == TORCH {
@@ -1646,6 +1762,22 @@ impl Game {
                     self.menu = Menu::Furnace;
                     return;
                 }
+                OAK_DOOR => {
+                    let m = self.world.get_meta(hit.x, hit.y, hit.z);
+                    let lower_y = if m & 8 != 0 { hit.y - 1 } else { hit.y };
+                    let lm = self.world.get_meta(hit.x, lower_y, hit.z) ^ 4;
+                    self.world.set_meta(hit.x, lower_y, hit.z, lm);
+                    if self.world.get(hit.x, lower_y + 1, hit.z) == OAK_DOOR {
+                        self.world.set_meta(hit.x, lower_y + 1, hit.z, lm | 8);
+                    }
+                    self.player.start_swing();
+                    self.sound_at_block("dig.wood", hit.x, hit.y, hit.z, 0.6);
+                    return;
+                }
+                BED => {
+                    self.try_sleep(hit.x, hit.y, hit.z);
+                    return;
+                }
                 CHEST => {
                     self.open_pos = (hit.x, hit.y, hit.z);
                     self.world.block_entities.entry(self.open_pos).or_insert_with(|| BlockEntity::Chest(vec![ItemStack::EMPTY; 27]));
@@ -1698,6 +1830,38 @@ impl Game {
                 self.schedule_fluid(px, py, pz);
                 *self.player.inv.held_mut() = ItemStack::new(item::BUCKET, 1);
                 self.player.start_swing();
+            }
+            return;
+        }
+        // Doors and beds occupy two blocks
+        if held.id == item::OAK_DOOR_ITEM || held.id == item::BED_ITEM {
+            let (nx, ny, nz) = DIRS[hit.face];
+            let (px, py, pz) = if block::def(tb).replaceable && tb != WATER && tb != LAVA { (hit.x, hit.y, hit.z) } else { (hit.x + nx, hit.y + ny, hit.z + nz) };
+            let free = |g: &Game, x: i32, y: i32, z: i32| {
+                let b = g.world.get(x, y, z);
+                (b == AIR || block::def(b).replaceable) && b != WATER && b != LAVA && y < CHUNK_H as i32
+            };
+            let facing = self.player_facing();
+            let pbb = self.player.body.aabb();
+            let hits_player = |x: i32, y: i32, z: i32| pbb.intersects(&Aabb::new(v3(x as f32, y as f32, z as f32), v3(x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0)));
+            if held.id == item::OAK_DOOR_ITEM {
+                if free(self, px, py, pz) && free(self, px, py + 1, pz) && block::is_opaque(self.world.get(px, py - 1, pz)) {
+                    self.set_block_updated(px, py, pz, OAK_DOOR, facing);
+                    self.world.set_block(px, py + 1, pz, OAK_DOOR, facing | 8);
+                    self.player.inv.consume_held(1);
+                    self.player.start_swing();
+                    self.sound_at_block("dig.wood", px, py, pz, 0.9);
+                }
+            } else {
+                let (dx, dz) = block::facing_step(facing);
+                let (hx, hz) = (px + dx, pz + dz);
+                if free(self, px, py, pz) && free(self, hx, py, hz) && block::is_opaque(self.world.get(px, py - 1, pz)) && block::is_opaque(self.world.get(hx, py - 1, hz)) && !hits_player(px, py, pz) && !hits_player(hx, py, hz) {
+                    self.set_block_updated(px, py, pz, BED, facing);
+                    self.set_block_updated(hx, py, hz, BED, facing | 4);
+                    self.player.inv.consume_held(1);
+                    self.player.start_swing();
+                    self.sound_at_block("dig.cloth", px, py, pz, 0.9);
+                }
             }
             return;
         }
@@ -1770,6 +1934,18 @@ impl Game {
                 }
             }
             WHEAT => return,
+            LADDER => {
+                meta = match hit.face {
+                    4 => 1,
+                    5 => 0,
+                    0 => 3,
+                    1 => 2,
+                    _ => return,
+                };
+                if !block::is_opaque(tb) {
+                    return;
+                }
+            }
             _ => {}
         }
         if block::def(pb).front.is_some() {
@@ -1827,6 +2003,36 @@ impl Game {
             t += 0.05;
         }
         None
+    }
+
+    fn try_sleep(&mut self, x: i32, y: i32, z: i32) {
+        if self.skydark() < 4.0 {
+            self.message("You can only sleep at night");
+            return;
+        }
+        let bp = v3(x as f32 + 0.5, y as f32, z as f32 + 0.5);
+        if (self.player.body.pos - bp).len() > 3.5 {
+            self.message("You may not rest now; the bed is too far away");
+            return;
+        }
+        let monsters = self.mobs.iter().any(|m| {
+            let d = m.body.pos - bp;
+            m.alive() && m.kind.hostile() && d.x.abs() < 8.0 && d.z.abs() < 8.0 && d.y.abs() < 5.0
+        });
+        if monsters {
+            self.message("You may not rest now; there are monsters nearby");
+            return;
+        }
+        // lie on the bed, set spawn
+        let meta = self.world.get_meta(x, y, z);
+        let (dx, dz) = block::facing_step(meta & 3);
+        let (hx, hz) = if meta & 4 != 0 { (x, z) } else { (x + dx, z + dz) };
+        self.player.spawn = v3(x as f32 + 0.5, y as f32 + 0.6, z as f32 + 0.5);
+        self.player.body.pos = v3(hx as f32 + 0.5, y as f32 + 0.5625, hz as f32 + 0.5);
+        self.player.body.vel = Vec3::ZERO;
+        self.player.prev_pos = self.player.body.pos;
+        self.player.sleeping = 1;
+        self.message("Respawn point set");
     }
 
     // ---------------- fluids ----------------

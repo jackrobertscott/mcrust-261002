@@ -195,6 +195,7 @@ impl Renderer {
             grass_overlay: t("grass_side_overlay"),
             grass_snowed: t("grass_side_snowed"),
             wheat: std::array::from_fn(|i| t(&format!("wheat_stage{i}"))),
+            bed: [t("bed_head_top"), t("bed_foot_top"), t("bed_head_side"), t("bed_foot_side"), t("bed_head_end"), t("bed_foot_end")],
             tiles_per_row: 16,
         });
 

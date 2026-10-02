@@ -391,6 +391,13 @@ fn run_script(g: &mut Game, win: &mut Window, script: &str, t: f32) {
                 g.selected_world = Some(0);
                 g.menu = Menu::SelectWorld;
             }
+            Some("setrel") => {
+                let v: Vec<i32> = parts.filter_map(|s| s.parse().ok()).collect();
+                if v.len() == 5 {
+                    let (px, py, pz) = g.player.body.pos.floor();
+                    g.world.set_block(px + v[0], py + v[1], pz + v[2], v[3] as u8, v[4] as u8);
+                }
+            }
             Some("fillrel") => {
                 let v: Vec<i32> = parts.filter_map(|s| s.parse().ok()).collect();
                 if v.len() == 7 {

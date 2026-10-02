@@ -959,6 +959,14 @@ impl Scene {
                 ui.text_centered(r, name, w / 2.0, h - 59.0, [255, 255, 255, a]);
             }
         }
+        if let Some((m, t)) = &g.action_msg {
+            let a = ((*t as f32 * 255.0 / 10.0).min(255.0)) as u8;
+            ui.text_centered(r, m, w / 2.0, h - 68.0, [255, 255, 255, a]);
+        }
+        if p.sleeping > 0 {
+            let a = ((p.sleeping as f32 / 70.0).min(1.0) * 230.0) as u8;
+            ui.rect(r, 0.0, 0.0, w, h, [16, 16, 32, a]);
+        }
         if g.show_debug {
             self.draw_debug(g, r, ui, fps);
         }

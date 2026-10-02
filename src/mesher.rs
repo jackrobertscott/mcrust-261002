@@ -15,6 +15,8 @@ pub struct TileTable {
     pub grass_overlay: u16,
     pub grass_snowed: u16,
     pub wheat: [u16; 8],
+    /// head_top, foot_top, head_side, foot_side, head_end, foot_end
+    pub bed: [u16; 6],
     pub tiles_per_row: u16,
 }
 
@@ -190,6 +192,15 @@ pub fn mesh_section(inp: &MeshInput, tiles: &TileTable) -> (Vec<Vertex>, Vec<Ver
                     Shape::Layer => mesh_box(inp, &mut b, x, y, z, id, [0.0; 3], [1.0, 2.0 / 16.0, 1.0]),
                     Shape::Farmland => mesh_box(inp, &mut b, x, y, z, id, [0.0; 3], [1.0, 15.0 / 16.0, 1.0]),
                     Shape::Cactus => mesh_cactus(inp, &mut b, x, y, z),
+                    Shape::Door => {
+                        let meta = inp.m(x, y, z);
+                        let (mn, mx) = block::door_box(meta);
+                        let t = b.tiles.blocks[OAK_DOOR as usize][if meta & 8 != 0 { 0 } else { 1 }];
+                        tile_box(inp, &mut b.solid, b.tiles, x, y, z, mn, mx, [t; 6], 0, false);
+                    }
+                    Shape::Ladder => mesh_ladder(inp, &mut b, x, y, z),
+                    Shape::Fence => mesh_fence(inp, &mut b, x, y, z),
+                    Shape::Bed => mesh_bed(inp, &mut b, x, y, z),
                     Shape::None => {}
                 }
             }
@@ -629,4 +640,132 @@ fn mesh_liquid(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32, id: u8)
             Builder::quad(out, rp, ru, color, [light; 4], false);
         }
     }
+}
+
+/// Flat-lit box with explicit tiles per face (order: -X,+X,-Y,+Y,-Z,+Z).
+/// `top_rot` rotates the top-face texture in 90 degree steps.
+#[allow(clippy::too_many_arguments)]
+fn tile_box(inp: &MeshInput, out: &mut Vec<Vertex>, tiles: &TileTable, x: i32, y: i32, z: i32, min: [f32; 3], max: [f32; 3], face_tiles: [u16; 6], top_rot: u8, skip_inner: bool) {
+    for face in 0..6 {
+        let (nx, ny, nz) = NORMALS[face];
+        let on_edge = match face {
+            0 => min[0] == 0.0,
+            1 => max[0] == 1.0,
+            2 => min[1] == 0.0,
+            3 => max[1] == 1.0,
+            4 => min[2] == 0.0,
+            _ => max[2] == 1.0,
+        };
+        let nb = inp.b(x + nx, y + ny, z + nz);
+        if on_edge && (block::is_opaque(nb) || (skip_inner && nb == inp.b(x, y, z))) {
+            continue;
+        }
+        let tile = face_tiles[face];
+        let l = if on_edge && !block::is_opaque(nb) { inp.l(x + nx, y + ny, z + nz) } else { inp.l(x, y, z) };
+        let l = l.max(inp.l(x, y, z));
+        let light = [(l >> 4) * 17, (l & 15) * 17, (FACE_SHADE[face] * 255.0) as u8];
+        let mut pos = [[0.0; 3]; 4];
+        let mut uvs = [[0.0; 2]; 4];
+        for i in 0..4 {
+            let c = FACE_VERTS[face][i];
+            let p = [
+                if c[0] > 0.5 { max[0] } else { min[0] },
+                if c[1] > 0.5 { max[1] } else { min[1] },
+                if c[2] > 0.5 { max[2] } else { min[2] },
+            ];
+            pos[i] = [x as f32 + p[0], y as f32 + p[1], z as f32 + p[2]];
+            let (mut u, mut v) = match face {
+                0 => (p[2], 1.0 - p[1]),
+                1 => (1.0 - p[2], 1.0 - p[1]),
+                2 => (p[0], p[2]),
+                3 => (p[0], p[2]),
+                4 => (1.0 - p[0], 1.0 - p[1]),
+                _ => (p[0], 1.0 - p[1]),
+            };
+            if face == 3 {
+                for _ in 0..top_rot {
+                    let (nu, nv) = (1.0 - v, u);
+                    u = nu;
+                    v = nv;
+                }
+            }
+            uvs[i] = tile_uv(tiles, tile, u, v);
+        }
+        Builder::quad(out, pos, uvs, [255; 4], [light; 4], false);
+    }
+}
+
+fn mesh_ladder(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32) {
+    let meta = inp.m(x, y, z);
+    let tile = b.tiles.blocks[LADDER as usize][2];
+    let e = 1.0 / 16.0;
+    let (fx, fy, fz) = (x as f32, y as f32, z as f32);
+    let q: [[f32; 3]; 4] = match meta & 3 {
+        0 => [[fx + 1.0, fy, fz + e], [fx, fy, fz + e], [fx, fy + 1.0, fz + e], [fx + 1.0, fy + 1.0, fz + e]],
+        1 => [[fx, fy, fz + 1.0 - e], [fx + 1.0, fy, fz + 1.0 - e], [fx + 1.0, fy + 1.0, fz + 1.0 - e], [fx, fy + 1.0, fz + 1.0 - e]],
+        2 => [[fx + e, fy, fz], [fx + e, fy, fz + 1.0], [fx + e, fy + 1.0, fz + 1.0], [fx + e, fy + 1.0, fz]],
+        _ => [[fx + 1.0 - e, fy, fz + 1.0], [fx + 1.0 - e, fy, fz], [fx + 1.0 - e, fy + 1.0, fz], [fx + 1.0 - e, fy + 1.0, fz + 1.0]],
+    };
+    let l = inp.l(x, y, z);
+    let shade = if meta & 3 < 2 { 0.8 } else { 0.6 };
+    let light = [(l >> 4) * 17, (l & 15) * 17, (shade * 255.0) as u8];
+    let uv: [[f32; 2]; 4] = std::array::from_fn(|i| tile_uv(b.tiles, tile, FACE_UVS[i][0], FACE_UVS[i][1]));
+    double_quad(&mut b.solid, q, uv, [255; 4], light);
+}
+
+fn mesh_fence(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32) {
+    let t = b.tiles.blocks[OAK_FENCE as usize][2];
+    let p = 1.0 / 16.0;
+    tile_box(inp, &mut b.solid, b.tiles, x, y, z, [6.0 * p, 0.0, 6.0 * p], [10.0 * p, 1.0, 10.0 * p], [t; 6], 0, false);
+    for (dx, dz) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+        if !block::fence_connects(inp.b(x + dx, y, z + dz)) {
+            continue;
+        }
+        for (y0, y1) in [(6.0 * p, 9.0 * p), (12.0 * p, 15.0 * p)] {
+            let (mn, mx) = match (dx, dz) {
+                (-1, 0) => ([0.0, y0, 7.0 * p], [6.0 * p, y1, 9.0 * p]),
+                (1, 0) => ([10.0 * p, y0, 7.0 * p], [1.0, y1, 9.0 * p]),
+                (0, -1) => ([7.0 * p, y0, 0.0], [9.0 * p, y1, 6.0 * p]),
+                _ => ([7.0 * p, y0, 10.0 * p], [9.0 * p, y1, 1.0]),
+            };
+            tile_box(inp, &mut b.solid, b.tiles, x, y, z, mn, mx, [t; 6], 0, false);
+        }
+    }
+}
+
+fn mesh_bed(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32) {
+    let meta = inp.m(x, y, z);
+    let facing = meta & 3;
+    let head = meta & 4 != 0;
+    let bt = b.tiles.bed;
+    let (top, side, end) = if head { (bt[0], bt[2], bt[4]) } else { (bt[1], bt[3], bt[5]) };
+    let planks = b.tiles.blocks[OAK_PLANKS as usize][2];
+    // face indices: 0 -X, 1 +X, 4 -Z, 5 +Z ; the end face is towards facing for the head, away for the foot
+    let toward = match facing {
+        0 => 4,
+        1 => 5,
+        2 => 0,
+        _ => 1,
+    };
+    let away = match facing {
+        0 => 5,
+        1 => 4,
+        2 => 1,
+        _ => 0,
+    };
+    let mut tiles = [side; 6];
+    tiles[2] = planks;
+    tiles[3] = top;
+    if head {
+        tiles[toward] = end;
+    } else {
+        tiles[away] = end;
+    }
+    let rot = match facing {
+        0 => 0,
+        1 => 2,
+        2 => 1,
+        _ => 3,
+    };
+    tile_box(inp, &mut b.solid, b.tiles, x, y, z, [0.0; 3], [1.0, 9.0 / 16.0, 1.0], tiles, rot, true);
 }

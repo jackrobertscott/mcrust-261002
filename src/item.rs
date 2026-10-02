@@ -46,6 +46,8 @@ items! {
     WATER_BUCKET = 285, "Water Bucket", "water_bucket";
     LAVA_BUCKET = 286, "Lava Bucket", "lava_bucket";
     PAPER = 287, "Paper", "paper";
+    OAK_DOOR_ITEM = 290, "Oak Door", "oak_door";
+    BED_ITEM = 291, "Bed", "red_bed";
     WOODEN_PICKAXE = 300, "Wooden Pickaxe", "wooden_pickaxe";
     WOODEN_AXE = 301, "Wooden Axe", "wooden_axe";
     WOODEN_SHOVEL = 302, "Wooden Shovel", "wooden_shovel";
@@ -101,6 +103,7 @@ pub fn texture(id: ItemId) -> Option<&'static str> {
             block::SUGAR_CANE => Some("b:sugar_cane"),
             block::WHEAT => Some("b:wheat_stage7"),
             block::OAK_SAPLING => Some("b:oak_sapling"),
+            block::LADDER => Some("b:ladder"),
             block::BIRCH_SAPLING => Some("b:birch_sapling"),
             block::SPRUCE_SAPLING => Some("b:spruce_sapling"),
             block::JUNGLE_SAPLING => Some("b:jungle_sapling"),
@@ -157,7 +160,7 @@ pub fn tool_info(id: ItemId) -> Option<ToolInfo> {
 }
 
 pub fn max_stack(id: ItemId) -> u8 {
-    if tool_info(id).is_some() || matches!(id, BOW | WATER_BUCKET | LAVA_BUCKET) {
+    if tool_info(id).is_some() || matches!(id, BOW | WATER_BUCKET | LAVA_BUCKET | BED_ITEM) {
         1
     } else if matches!(id, EGG | BUCKET) {
         16
@@ -193,7 +196,7 @@ pub fn fuel_time(id: ItemId) -> i32 {
         if block::is_sapling(b) {
             return 100;
         }
-        if (block::OAK_PLANKS..=block::ACACIA_PLANKS).contains(&b) || block::is_log(b) || matches!(b, block::CRAFTING_TABLE | block::CHEST | block::BOOKSHELF) {
+        if (block::OAK_PLANKS..=block::ACACIA_PLANKS).contains(&b) || block::is_log(b) || matches!(b, block::CRAFTING_TABLE | block::CHEST | block::BOOKSHELF | block::OAK_FENCE | block::LADDER) {
             return 300;
         }
         if b == block::COAL_BLOCK {
@@ -207,6 +210,7 @@ pub fn fuel_time(id: ItemId) -> i32 {
         LAVA_BUCKET => 20000,
         BOW => 300,
         BOWL => 100,
+        OAK_DOOR_ITEM => 200,
         _ => {
             if let Some(t) = tool_info(id) {
                 if t.material == 0 {

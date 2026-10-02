@@ -308,9 +308,46 @@ impl Ui {
             }
             return;
         }
+        if id == crate::block::OAK_FENCE as u16 {
+            self.fence_icon(r, x, y);
+            return;
+        }
         if id < 256 {
             self.block_icon(r, id as u8, x, y);
         }
+    }
+
+    /// Isometric box in a 16x16 icon cell (min/max in block units 0..1).
+    fn iso_box(&mut self, r: &Renderer, x: f32, y: f32, min: [f32; 3], max: [f32; 3], tile: u16) {
+        self.use_tex(r.block_atlas.id, r.block_atlas.w, r.block_atlas.h);
+        let (cx, top_y, sx, sy, vh) = (x + 8.0, y + 1.0, 7.0, 3.6, 8.4);
+        let proj = |p: [f32; 3]| -> (f32, f32) { (cx + (p[0] - p[2]) * sx, top_y + (p[0] + p[2]) * sy + (1.0 - p[1]) * vh) };
+        let (u0, v0, s) = r.block_tile_uv(tile);
+        let uv = |u: f32, v: f32| [u0 + u * s, v0 + v * s];
+        let (a, b) = (min, max);
+        // +Z face (left), +X face (right), +Y (top)
+        let faces: [([[f32; 3]; 4], [[f32; 2]; 4], f32); 3] = [
+            ([[a[0], b[1], b[2]], [b[0], b[1], b[2]], [b[0], a[1], b[2]], [a[0], a[1], b[2]]], [uv(a[0], 1.0 - b[1]), uv(b[0], 1.0 - b[1]), uv(b[0], 1.0 - a[1]), uv(a[0], 1.0 - a[1])], 0.8),
+            ([[b[0], b[1], b[2]], [b[0], b[1], a[2]], [b[0], a[1], a[2]], [b[0], a[1], b[2]]], [uv(1.0 - b[2], 1.0 - b[1]), uv(1.0 - a[2], 1.0 - b[1]), uv(1.0 - a[2], 1.0 - a[1]), uv(1.0 - b[2], 1.0 - a[1])], 0.6),
+            ([[a[0], b[1], a[2]], [b[0], b[1], a[2]], [b[0], b[1], b[2]], [a[0], b[1], b[2]]], [uv(a[0], a[2]), uv(b[0], a[2]), uv(b[0], b[2]), uv(a[0], b[2])], 1.0),
+        ];
+        for (pts, uvs, shade) in faces {
+            let c = [(255.0 * shade) as u8, (255.0 * shade) as u8, (255.0 * shade) as u8, 255];
+            let mk = |i: usize| {
+                let (px, py) = proj(pts[i]);
+                Vertex { pos: [px, py, 0.0], uv: uvs[i], color: c, light: [0; 4] }
+            };
+            self.verts.extend_from_slice(&[mk(0), mk(1), mk(2), mk(0), mk(2), mk(3)]);
+        }
+    }
+
+    fn fence_icon(&mut self, r: &Renderer, x: f32, y: f32) {
+        let t = r.tiles.blocks[crate::block::OAK_FENCE as usize][2];
+        // back-to-front: rails between posts are drawn after the far post
+        self.iso_box(r, x, y, [0.0625, 0.0, 0.375], [0.3125, 1.0, 0.625], t);
+        self.iso_box(r, x, y, [0.3125, 0.375, 0.4375], [0.6875, 0.5625, 0.5625], t);
+        self.iso_box(r, x, y, [0.3125, 0.75, 0.4375], [0.6875, 0.9375, 0.5625], t);
+        self.iso_box(r, x, y, [0.6875, 0.0, 0.375], [0.9375, 1.0, 0.625], t);
     }
 
     /// Isometric 3D block icon as drawn in vanilla inventories.
