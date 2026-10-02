@@ -68,7 +68,7 @@ pub fn title(g: &mut Game, r: &Renderer, ui: &mut Ui, inp: &Input, time: f32) ->
     // "Java Edition"-style subtitle replaced by Rust Edition
     let sub = "RUST EDITION";
     let sw = ui.text_width(r, sub);
-    ui.text(r, sub, (w / 2.0 - sw / 2.0).floor() + 40.0, 30.0 + 44.0 - 5.0, [255, 255, 255, 255]);
+    ui.text(r, sub, (w / 2.0 - sw / 2.0).floor(), 30.0 + 44.0 - 5.0, [255, 255, 255, 255]);
 
     // splash
     let splash = g.splash.clone();

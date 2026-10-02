@@ -145,6 +145,7 @@ pub mod key {
     pub const F3: u16 = 99;
     pub const F2: u16 = 120;
     pub const F1: u16 = 122;
+    pub const F11: u16 = 103;
     pub const LEFT: u16 = 123;
     pub const RIGHT: u16 = 124;
     pub const DOWN: u16 = 125;
@@ -470,6 +471,10 @@ impl Window {
         unsafe {
             CGWarpMouseCursorPosition(NSPoint { x: cx, y: sf.size.h - cy });
         }
+    }
+
+    pub fn toggle_fullscreen(&self) {
+        msg!((); self.window, "toggleFullScreen:", NIL => Id);
     }
 
     pub fn set_title(&self, title: &str) {

@@ -100,6 +100,11 @@ pub fn texture(id: ItemId) -> Option<&'static str> {
             block::BLUE_ORCHID => Some("b:blue_orchid"),
             block::SUGAR_CANE => Some("b:sugar_cane"),
             block::WHEAT => Some("b:wheat_stage7"),
+            block::OAK_SAPLING => Some("b:oak_sapling"),
+            block::BIRCH_SAPLING => Some("b:birch_sapling"),
+            block::SPRUCE_SAPLING => Some("b:spruce_sapling"),
+            block::JUNGLE_SAPLING => Some("b:jungle_sapling"),
+            block::ACACIA_SAPLING => Some("b:acacia_sapling"),
             _ => None,
         };
     }
@@ -185,6 +190,9 @@ pub fn food(id: ItemId) -> Option<(i32, f32)> {
 pub fn fuel_time(id: ItemId) -> i32 {
     if id < 256 {
         let b = id as u8;
+        if block::is_sapling(b) {
+            return 100;
+        }
         if (block::OAK_PLANKS..=block::ACACIA_PLANKS).contains(&b) || block::is_log(b) || matches!(b, block::CRAFTING_TABLE | block::CHEST | block::BOOKSHELF) {
             return 300;
         }

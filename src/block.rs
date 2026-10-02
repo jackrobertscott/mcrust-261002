@@ -66,7 +66,12 @@ pub const SNOW_BLOCK: u8 = 59;
 pub const ICE: u8 = 60;
 pub const CLAY: u8 = 61;
 pub const PUMPKIN: u8 = 62;
-pub const NUM_BLOCKS: usize = 63;
+pub const OAK_SAPLING: u8 = 63;
+pub const BIRCH_SAPLING: u8 = 64;
+pub const SPRUCE_SAPLING: u8 = 65;
+pub const JUNGLE_SAPLING: u8 = 66;
+pub const ACACIA_SAPLING: u8 = 67;
+pub const NUM_BLOCKS: usize = 68;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Shape {
@@ -333,6 +338,11 @@ pub static BLOCKS: [BlockDef; NUM_BLOCKS] = {
         ice,
         cube("Clay", "clay", 0.6, Shovel, 0),
         pumpkin,
+        plant("Oak Sapling", "oak_sapling", Tint::None),
+        plant("Birch Sapling", "birch_sapling", Tint::None),
+        plant("Spruce Sapling", "spruce_sapling", Tint::None),
+        plant("Jungle Sapling", "jungle_sapling", Tint::None),
+        plant("Acacia Sapling", "acacia_sapling", Tint::None),
     ]
 };
 
@@ -355,13 +365,16 @@ pub fn is_log(id: BlockId) -> bool {
 pub fn is_leaves(id: BlockId) -> bool {
     (OAK_LEAVES..=ACACIA_LEAVES).contains(&id)
 }
+pub fn is_sapling(id: BlockId) -> bool {
+    (OAK_SAPLING..=ACACIA_SAPLING).contains(&id)
+}
 pub fn is_plant(id: BlockId) -> bool {
     matches!(def(id).shape, Shape::Cross | Shape::Crop)
 }
 
 /// Does this block need a supporting block below it?
 pub fn needs_support(id: BlockId) -> bool {
-    matches!(id, WHEAT | SHORT_GRASS | FERN | DEAD_BUSH | DANDELION | POPPY | BLUE_ORCHID | SUGAR_CANE | CACTUS | SNOW_LAYER)
+    matches!(id, WHEAT | SHORT_GRASS | FERN | DEAD_BUSH | DANDELION | POPPY | BLUE_ORCHID | SUGAR_CANE | CACTUS | SNOW_LAYER) || is_sapling(id)
 }
 
 /// Collision box(es) in local block coords (min, max) or None if not solid.

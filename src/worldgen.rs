@@ -803,6 +803,42 @@ impl Generator {
     }
 }
 
+impl Generator {
+    /// Grow a tree from a sapling. Returns the list of (x,y,z,block) to place.
+    pub fn grow_tree(&self, sapling: u8, x: i32, y: i32, z: i32, seed: u64) -> Vec<(i32, i32, i32, u8)> {
+        // Build into a scratch chunk centred on the sapling, then translate.
+        let mut ch = Chunk::new(0, 0);
+        let (lx, lz) = (8, 8);
+        let mut r = Random::new(seed);
+        let base = 2; // local y offset so the trunk base fits (we only need relative heights)
+        match sapling {
+            BIRCH_SAPLING => self.tree_oak(&mut ch, lx, base, lz, &mut r, BIRCH_LOG, BIRCH_LEAVES, 5),
+            SPRUCE_SAPLING => self.tree_spruce(&mut ch, lx, base, lz, &mut r),
+            JUNGLE_SAPLING => self.tree_oak(&mut ch, lx, base, lz, &mut r, JUNGLE_LOG, JUNGLE_LEAVES, 6),
+            ACACIA_SAPLING => self.tree_acacia(&mut ch, lx, base, lz, &mut r),
+            _ => {
+                if r.chance(0.1) {
+                    self.tree_big_oak(&mut ch, lx, base, lz, &mut r)
+                } else {
+                    self.tree_oak(&mut ch, lx, base, lz, &mut r, OAK_LOG, OAK_LEAVES, 4)
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for yy in base..CHUNK_H as i32 {
+            for zz in 0..16 {
+                for xx in 0..16 {
+                    let b = ch.get(xx, yy, zz);
+                    if b != AIR {
+                        out.push((x + xx - lx, y + yy - base, z + zz - lz, b));
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
 /// Used by the game to pick a spawn point.
 pub fn find_spawn(generator: &Generator) -> (i32, i32, i32) {
     for r in 0..200 {

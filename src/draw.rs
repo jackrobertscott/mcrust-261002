@@ -31,10 +31,20 @@ impl ItemModels {
 
     pub fn get(&mut self, r: &Renderer, id: ItemId) -> &(Vec<Vertex>, Atlas) {
         if !self.cache.contains_key(&id) {
-            let m = build_item_model(r, id);
+            let m = build_item_model(r, id, None);
             self.cache.insert(id, m);
         }
         &self.cache[&id]
+    }
+
+    /// Model for a specific item texture (e.g. bow pulling stages), cached under a pseudo id.
+    pub fn get_tex(&mut self, r: &Renderer, key: ItemId, tex: &'static str) -> &(Vec<Vertex>, Atlas) {
+        if !self.cache.contains_key(&key) {
+            let t = if r.item_tile.contains_key(tex) { Some(tex) } else { None };
+            let m = build_item_model(r, item::BOW, t);
+            self.cache.insert(key, m);
+        }
+        &self.cache[&key]
     }
 }
 
@@ -43,11 +53,11 @@ pub fn is_cube_item(id: ItemId) -> bool {
     item::texture(id).is_none() && id < 256
 }
 
-fn build_item_model(r: &Renderer, id: ItemId) -> (Vec<Vertex>, Atlas) {
-    if is_cube_item(id) {
+fn build_item_model(r: &Renderer, id: ItemId, tex_override: Option<&str>) -> (Vec<Vertex>, Atlas) {
+    if is_cube_item(id) && tex_override.is_none() {
         return (cube_model(r, id as u8), Atlas::Blocks);
     }
-    let tex = item::texture(id).unwrap_or("stick");
+    let tex = tex_override.unwrap_or_else(|| item::texture(id).unwrap_or("stick"));
     let (img, atlas, (u0, v0, s)) = if let Some(bn) = tex.strip_prefix("b:") {
         let t = *r.block_tile.get(bn).unwrap_or(&0);
         (&r.block_atlas_img, Atlas::Blocks, r.tiles.uv(t))
@@ -737,7 +747,13 @@ impl Scene {
                 m * Mat4::translate(1.13 / 16.0, 3.2 / 16.0, 1.13 / 16.0) * Mat4::rot_y((-90f32).to_radians()) * Mat4::rot_z(25f32.to_radians()) * Mat4::scale(0.68, 0.68, 0.68) * Mat4::translate(-0.5, -0.5, 0.0)
             }
         };
-        let (mv, atlas) = self.items.get(r, held.id).clone();
+        let (mv, atlas) = if held.id == item::BOW && p.bow_charge > 0 {
+            let stage = if p.bow_charge >= 18 { 2 } else if p.bow_charge > 13 { 1 } else { 0 };
+            let tex = ["bow_pulling_0", "bow_pulling_1", "bow_pulling_2"][stage];
+            self.items.get_tex(r, 60000 + stage as u16, tex).clone()
+        } else {
+            self.items.get(r, held.id).clone()
+        };
         transform_verts(&mv, &model_m, sky, blk, &mut verts);
         if atlas == Atlas::Blocks { r.block_atlas.bind() } else { r.item_atlas.bind() }
         unsafe { gl::glDisable(gl::CULL_FACE) };

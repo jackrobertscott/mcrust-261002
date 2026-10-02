@@ -523,13 +523,29 @@ fn mesh_torch(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32) {
 fn mesh_liquid(inp: &MeshInput, b: &mut Builder, x: i32, y: i32, z: i32, id: u8) {
     let tile = b.tiles.blocks[id as usize][0];
     let above = inp.b(x, y + 1, z);
-    let top_h = if above == id { 1.0 } else { 14.0 / 16.0 };
+    let level = inp.m(x, y, z);
+    let top_h = if above == id {
+        1.0
+    } else if level == 0 || level >= 8 {
+        14.0 / 16.0
+    } else {
+        ((8 - level) as f32 / 9.0).max(1.0 / 9.0)
+    };
     let translucent = id == WATER;
     for face in 0..6 {
         let (nx, ny, nz) = NORMALS[face];
         let nb = inp.b(x + nx, y + ny, z + nz);
-        if nb == id || (face != 3 && block::is_opaque(nb)) {
+        if face != 3 && block::is_opaque(nb) {
             continue;
+        }
+        if nb == id {
+            // show the step between liquid of different heights on the sides
+            let nm = inp.m(x + nx, y + ny, z + nz);
+            let n_above = inp.b(x + nx, y + ny + 1, z + nz) == id;
+            let nh = if n_above { 1.0 } else if nm == 0 || nm >= 8 { 14.0 / 16.0 } else { ((8 - nm) as f32 / 9.0).max(1.0 / 9.0) };
+            if face == 2 || face == 3 || nh >= top_h {
+                continue;
+            }
         }
         if face == 3 && block::is_opaque(nb) && top_h >= 1.0 {
             continue;

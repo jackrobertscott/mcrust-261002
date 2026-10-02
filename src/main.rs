@@ -43,6 +43,22 @@ fn main() {
         worldgen::debug_map(args[2].parse().unwrap_or(1), &args[3], 512, 8);
         return;
     }
+    if args.len() >= 2 && args[1] == "--spawninfo" {
+        for seed in 1..60u64 {
+            let g = worldgen::Generator::new(seed);
+            let (x, y, z) = worldgen::find_spawn(&g);
+            let mut counts = std::collections::HashMap::new();
+            for dz in (-64..64).step_by(8) {
+                for dx in (-64..64).step_by(8) {
+                    *counts.entry(g.column(x + dx, z + dz).biome.name()).or_insert(0) += 1;
+                }
+            }
+            let mut v: Vec<_> = counts.into_iter().collect();
+            v.sort_by(|a, b| b.1.cmp(&a.1));
+            println!("seed {seed}: spawn {x},{y},{z} {:?}", &v[..v.len().min(4)]);
+        }
+        return;
+    }
     // Debug/automation: --shot <file> saves a screenshot after N seconds; --autoplay starts a world
     let shot = args.iter().position(|a| a == "--shot").and_then(|i| args.get(i + 1).cloned());
     let shot_delay: f32 = args.iter().position(|a| a == "--shot-delay").and_then(|i| args.get(i + 1)).and_then(|s| s.parse().ok()).unwrap_or(8.0);
@@ -88,6 +104,9 @@ fn main() {
             run_script(&mut game, &mut win, s, elapsed);
         }
 
+        if win.events.iter().any(|e| matches!(e, platform::Event::KeyDown(platform::key::F11, false))) {
+            win.toggle_fullscreen();
+        }
         // GUI scale
         r.resize(win.width, win.height);
         if game.options.gui_scale > 0 {

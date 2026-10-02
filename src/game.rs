@@ -159,6 +159,7 @@ pub struct Player {
     pub limb_swing: f32,
     pub limb_amount: f32,
     pub body_yaw: f32,
+    pub bow_charge: i32,
 }
 
 impl Player {
@@ -205,6 +206,7 @@ impl Player {
             limb_swing: 0.0,
             limb_amount: 0.0,
             body_yaw: 0.0,
+            bow_charge: 0,
         }
     }
     pub fn eye_height(&self) -> f32 {
@@ -277,7 +279,11 @@ pub struct Game {
     pub was_in_water: bool,
 }
 
-pub const TITLE_SEED: u64 = 0xC0FFEE;
+pub const TITLE_SEED: u64 = 59;
+
+pub fn title_seed() -> u64 {
+    std::env::var("MCRUST_TITLE_SEED").ok().and_then(|s| s.parse().ok()).unwrap_or(TITLE_SEED)
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct SoundEvent {
@@ -307,11 +313,11 @@ const SPLASHES: &[&str] = &[
 
 impl Game {
     pub fn new() -> Game {
-        let world = World::new(TITLE_SEED);
+        let world = World::new(title_seed());
         let mut rng = Random::new(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1));
         let splash = SPLASHES[rng.range(SPLASHES.len() as i32) as usize].to_string();
         let (sx, sy, sz) = crate::worldgen::find_spawn(&world.generator);
-        let p = Player::new(v3(sx as f32 + 0.5, sy as f32 + 2.0, sz as f32 + 0.5));
+        let p = Player::new(v3(sx as f32 + 0.5, sy as f32 + 10.0, sz as f32 + 0.5));
         Game {
             menu: Menu::Title,
             world,
@@ -429,11 +435,11 @@ impl Game {
         self.close_container_silent();
         self.save();
         self.in_world = false;
-        let seed = TITLE_SEED;
+        let seed = title_seed();
         self.reset_world(World::new(seed));
         self.menu = Menu::Title;
         let (sx, sy, sz) = crate::worldgen::find_spawn(&self.world.generator);
-        self.player = Player::new(v3(sx as f32 + 0.5, sy as f32 + 2.0, sz as f32 + 0.5));
+        self.player = Player::new(v3(sx as f32 + 0.5, sy as f32 + 10.0, sz as f32 + 0.5));
     }
 
     /// Load / unload chunks around a centre.
@@ -692,6 +698,7 @@ impl Game {
         self.random_ticks();
         self.tick_furnaces();
         self.spawn_mobs();
+        self.display_ticks();
     }
 
     fn tick_furnaces(&mut self) {
@@ -717,8 +724,30 @@ impl Game {
         }
     }
 
+    /// Random "display ticks" near the player: torch flames & smoke, lava pops.
+    fn display_ticks(&mut self) {
+        let (px, py, pz) = self.player.body.pos.floor();
+        for _ in 0..800 {
+            let x = px + self.rng.range(33) - 16;
+            let y = py + self.rng.range(33) - 16;
+            let z = pz + self.rng.range(33) - 16;
+            let b = self.world.get(x, y, z);
+            if b == TORCH {
+                let meta = self.world.get_meta(x, y, z);
+                let (base, lean) = crate::mesher::torch_geometry(meta);
+                let p = v3(x as f32 + base[0] + lean[0], y as f32 + base[1] + 0.68, z as f32 + base[2] + lean[2]);
+                self.flame_particle(p);
+                self.particles.push(Particle { pos: p, prev_pos: p, vel: v3(0.0, 0.01, 0.0), age: 0, life: 20 + self.rng.range(10), size: 0.04, uv: [0.0; 4], color: [60, 60, 60, 255], gravity: -0.001, textured: false, emissive: false });
+            } else if b == LAVA && self.world.get(x, y + 1, z) == AIR && self.rng.chance(0.05) {
+                let p = v3(x as f32 + self.rng.next_f32(), y as f32 + 1.0, z as f32 + self.rng.next_f32());
+                let v = v3(self.rng.uniform(-0.05, 0.05), 0.15, self.rng.uniform(-0.05, 0.05));
+                self.particles.push(Particle { pos: p, prev_pos: p, vel: v, age: 0, life: 30, size: 0.05, uv: [0.0; 4], color: [255, 150, 40, 255], gravity: 0.01, textured: false, emissive: true });
+            }
+        }
+    }
+
     fn flame_particle(&mut self, p: Vec3) {
-        self.particles.push(Particle { pos: p, prev_pos: p, vel: v3(0.0, 0.004, 0.0), age: 0, life: 12 + self.rng.range(8), size: 0.06, uv: [0.0; 4], color: [255, 180, 60, 255], gravity: -0.0005, textured: false, emissive: true });
+        self.particles.push(Particle { pos: p, prev_pos: p, vel: v3(0.0, 0.004, 0.0), age: 0, life: 20 + self.rng.range(20), size: 0.06, uv: [0.0; 4], color: [255, 180, 60, 255], gravity: -0.0005, textured: false, emissive: true });
     }
 
     pub fn skydark(&self) -> f32 {
@@ -1345,6 +1374,16 @@ impl Game {
                 let held = self.player.inv.held();
                 let _ = held;
                 let mut v = vec![];
+                let sap = match b {
+                    BIRCH_LEAVES => BIRCH_SAPLING,
+                    SPRUCE_LEAVES => SPRUCE_SAPLING,
+                    JUNGLE_LEAVES => JUNGLE_SAPLING,
+                    ACACIA_LEAVES => ACACIA_SAPLING,
+                    _ => OAK_SAPLING,
+                };
+                if self.rng.chance(if b == JUNGLE_LEAVES { 0.025 } else { 0.05 }) {
+                    v.push(ItemStack::new(sap as u16, 1));
+                }
                 if self.rng.chance(0.02) {
                     v.push(ItemStack::new(item::STICK, 1 + self.rng.range(2) as u8));
                 }
@@ -1446,6 +1485,40 @@ impl Game {
     fn tick_use(&mut self, win: &Window) {
         let rmb = win.buttons[1];
         let held = self.player.inv.held();
+        // Bow: hold to draw, release to shoot
+        if held.id == item::BOW {
+            let has_arrow = self.player.inv.slots.iter().any(|s| s.id == item::ARROW && s.count > 0);
+            if rmb && has_arrow {
+                self.player.bow_charge += 1;
+                return;
+            }
+            if !rmb && self.player.bow_charge > 0 {
+                let charge = self.player.bow_charge;
+                self.player.bow_charge = 0;
+                let mut f = charge as f32 / 20.0;
+                f = (f * f + f * 2.0) / 3.0;
+                if f < 0.1 {
+                    return;
+                }
+                let f = f.min(1.0);
+                if let Some(i) = self.player.inv.slots.iter().position(|s| s.id == item::ARROW && s.count > 0) {
+                    self.player.inv.slots[i].count -= 1;
+                    if self.player.inv.slots[i].count == 0 {
+                        self.player.inv.slots[i] = ItemStack::EMPTY;
+                    }
+                }
+                let d = self.player.look_dir();
+                let from = self.player.eye() - v3(0.0, 0.1, 0.0);
+                let dmg = if f >= 1.0 { 9.0 } else { 6.0 * f };
+                self.arrows.push(Arrow { pos: from, prev_pos: from, vel: d * (f * 3.0), stuck: false, age: 0, from_player: true, damage: dmg.max(1.0) });
+                self.player.inv.damage_held(1);
+                self.sound("bow", Some(from), 0.8);
+                return;
+            }
+            self.player.bow_charge = 0;
+        } else {
+            self.player.bow_charge = 0;
+        }
         // Eating
         if let Some((hunger, sat)) = item::food(held.id) {
             if rmb && (self.player.food < 20 || self.options.difficulty == Difficulty::Peaceful && false) {
@@ -1621,7 +1694,7 @@ impl Game {
                     return;
                 }
             }
-            SHORT_GRASS | FERN | DANDELION | POPPY | BLUE_ORCHID => {
+            SHORT_GRASS | FERN | DANDELION | POPPY | BLUE_ORCHID | OAK_SAPLING | BIRCH_SAPLING | SPRUCE_SAPLING | JUNGLE_SAPLING | ACACIA_SAPLING => {
                 if !matches!(below, GRASS | DIRT | FARMLAND) {
                     return;
                 }
@@ -1960,6 +2033,28 @@ impl Game {
                     self.break_block(x, y, z, false);
                 }
             }
+            OAK_SAPLING | BIRCH_SAPLING | SPRUCE_SAPLING | JUNGLE_SAPLING | ACACIA_SAPLING => {
+                let light = self.world.sky_light(x, y + 1, z).max(self.world.block_light(x, y + 1, z));
+                if light >= 9 && self.rng.chance(1.0 / 7.0) {
+                    let blocks = self.world.generator.grow_tree(b, x, y, z, self.rng.next_u64());
+                    // need room: every log position must be free (air, plant or the sapling itself)
+                    let ok = blocks.iter().all(|&(bx, by, bz, nb)| {
+                        let cur = self.world.get(bx, by, bz);
+                        by < CHUNK_H as i32 && (!block::is_log(nb) || cur == AIR || block::is_leaves(cur) || block::def(cur).replaceable || (bx, by, bz) == (x, y, z) || block::is_plant(cur))
+                    });
+                    if ok {
+                        for (bx, by, bz, nb) in blocks {
+                            let cur = self.world.get(bx, by, bz);
+                            if block::is_log(nb) || cur == AIR || block::def(cur).replaceable || block::is_sapling(cur) {
+                                if nb == DIRT && block::is_solid(cur) {
+                                    continue;
+                                }
+                                self.world.set_block(bx, by, bz, nb, 0);
+                            }
+                        }
+                    }
+                }
+            }
             ICE => {
                 if self.world.block_light(x, y + 1, z) > 11 {
                     self.set_block_updated(x, y, z, WATER, 0);
@@ -2211,6 +2306,18 @@ impl Game {
                     break;
                 }
                 a.pos = np;
+                if a.from_player {
+                    let pt = Aabb::new(a.pos, a.pos);
+                    if let Some(m) = self.mobs.iter_mut().find(|m| m.alive() && m.aabb().grow(0.15).intersects(&pt)) {
+                        let speed = a.vel.len();
+                        let dmg = (a.damage * speed / 3.0).max(1.0).ceil();
+                        m.invuln = 0;
+                        let from = a.pos - a.vel;
+                        m.hurt(dmg, from, &mut self.rng);
+                        a.age = 10000;
+                        break;
+                    }
+                }
                 if !a.from_player {
                     let pb = self.player.body.aabb();
                     if pb.grow(0.1).intersects(&Aabb::new(a.pos, a.pos)) && !self.player.dead {
@@ -2227,6 +2334,21 @@ impl Game {
             let _ = i;
             let from = self.player.body.pos - v3(0.0, 0.0, 0.0);
             self.damage_player(dmg, Some(from));
+        }
+        // pick up stuck player arrows
+        let pbb = self.player.body.aabb().grow(0.6);
+        let mut got = 0;
+        for a in self.arrows.iter_mut() {
+            if a.stuck && a.from_player && a.age > 5 && a.age < 1200 && pbb.intersects(&Aabb::new(a.pos, a.pos)) {
+                if self.player.inv.add(ItemStack::new(item::ARROW, 1)) == 0 {
+                    a.age = 10000;
+                    got += 1;
+                }
+            }
+        }
+        if got > 0 {
+            let pos = Some(self.player.body.pos);
+            self.sounds.push(SoundEvent { name: "pop", pos, volume: 0.25, pitch: 1.6 });
         }
         self.arrows.retain(|a| a.age < 1200);
     }
