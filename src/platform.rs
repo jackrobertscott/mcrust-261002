@@ -473,6 +473,15 @@ impl Window {
         }
     }
 
+    /// Set the Dock icon from PNG-encoded bytes.
+    pub fn set_icon_png(&self, png: &[u8]) {
+        let data = msg!(Id; class("NSData"), "dataWithBytes:length:", png.as_ptr() as *const c_void => *const c_void, png.len() as u64 => u64);
+        let img = msg!(Id; msg!(Id; class("NSImage"), "alloc"), "initWithData:", data => Id);
+        if !img.is_null() {
+            msg!((); self.app, "setApplicationIconImage:", img => Id);
+        }
+    }
+
     pub fn toggle_fullscreen(&self) {
         msg!((); self.window, "toggleFullScreen:", NIL => Id);
     }

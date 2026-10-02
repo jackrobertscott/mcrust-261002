@@ -36,6 +36,7 @@ fn main() {
         let dir = args.get(2).map(|s| s.as_str()).unwrap_or("asset_dump");
         assets::dump_all(dir);
         assets::contact_sheet(&format!("{dir}/sheet.png"));
+        let _ = assets::grass_block_icon(256).save_png(&format!("{dir}/icon.png"));
         println!("assets written to {dir}");
         return;
     }
@@ -66,6 +67,7 @@ fn main() {
     let script = args.iter().position(|a| a == "--script").and_then(|i| args.get(i + 1).cloned());
 
     let mut win = Window::new("Minecraft", 854.0, 480.0);
+    win.set_icon_png(&assets::grass_block_icon(256).to_png());
     let mut r = render::Renderer::new();
     let mut scene = draw::Scene::new();
     let mut ui = ui::Ui::new();
