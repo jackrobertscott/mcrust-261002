@@ -1402,14 +1402,28 @@ impl Game {
     fn block_hit_particles(&mut self, hit: Hit) {
         let b = self.world.get(hit.x, hit.y, hit.z);
         let (nx, ny, nz) = DIRS[hit.face];
-        let c = v3(hit.x as f32 + 0.5 + nx as f32 * 0.52, hit.y as f32 + 0.5 + ny as f32 * 0.52, hit.z as f32 + 0.5 + nz as f32 * 0.52);
-        let jitter = v3(if nx == 0 { self.rng.uniform(-0.45, 0.45) } else { 0.0 }, if ny == 0 { self.rng.uniform(-0.45, 0.45) } else { 0.0 }, if nz == 0 { self.rng.uniform(-0.45, 0.45) } else { 0.0 });
-        self.block_particle(b, c + jitter, v3(nx as f32 * 0.05, 0.05, nz as f32 * 0.05));
+        let c = v3(hit.x as f32 + 0.5 + nx as f32 * 0.6, hit.y as f32 + 0.5 + ny as f32 * 0.6, hit.z as f32 + 0.5 + nz as f32 * 0.6);
+        let jitter = v3(if nx == 0 { self.rng.uniform(-0.4, 0.4) } else { 0.0 }, if ny == 0 { self.rng.uniform(-0.4, 0.4) } else { 0.0 }, if nz == 0 { self.rng.uniform(-0.4, 0.4) } else { 0.0 });
+        // small chips that pop off the face and fall (vanilla: power 0.2, scale 0.6)
+        let v = self.particle_velocity(Vec3::ZERO);
+        let v = v3(v.x * 0.2, (v.y - 0.1) * 0.2 + 0.1, v.z * 0.2);
+        self.block_particle(b, c + jitter, v, 0.6);
     }
 
-    pub fn block_particle(&mut self, b: u8, pos: Vec3, vel: Vec3) {
+    /// Vanilla particle launch: the base direction plus random spread, at a
+    /// random speed, with a little upward kick.
+    fn particle_velocity(&mut self, base: Vec3) -> Vec3 {
+        let r = &mut self.rng;
+        let d = base + v3(r.uniform(-0.4, 0.4), r.uniform(-0.4, 0.4), r.uniform(-0.4, 0.4));
+        let speed = (r.next_f32() + r.next_f32() + 1.0) * 0.15 * 0.4;
+        let l = d.len().max(1e-4);
+        v3(d.x / l * speed, d.y / l * speed + 0.1, d.z / l * speed)
+    }
+
+    /// A terrain debris particle: a random 4x4-pixel chip of the block's
+    /// texture, darkened to 60% like vanilla's.
+    pub fn block_particle(&mut self, b: u8, pos: Vec3, vel: Vec3, scale: f32) {
         // pick a random 4x4 sub-region of the block's side texture; uv filled by renderer via tile index
-        let tile_side = 2usize;
         let su = self.rng.range(12) as f32 / 16.0;
         let sv = self.rng.range(12) as f32 / 16.0;
         let tint = match block::def(b).tint {
@@ -1420,17 +1434,17 @@ impl Game {
             Tint::Fixed(c) => c,
             Tint::None => 0xFFFFFF,
         };
-        let _ = tile_side;
+        let dark = |c: u32| (c as f32 * 0.6) as u8;
         self.particles.push(Particle {
             pos,
             prev_pos: pos,
             vel,
             age: 0,
-            life: 10 + self.rng.range(20),
-            size: 0.05 + self.rng.next_f32() * 0.05,
+            life: (4.0 / (self.rng.next_f32() * 0.9 + 0.1)) as i32,
+            size: (0.05 + self.rng.next_f32() * 0.05) * scale,
             // encode: u0 = block id, v0 = sub offsets (resolved at render time)
             uv: [b as f32, su, sv, 0.0],
-            color: [(tint >> 16) as u8, (tint >> 8) as u8, tint as u8, 255],
+            color: [dark((tint >> 16) & 255), dark((tint >> 8) & 255), dark(tint & 255), 255],
             gravity: 0.04,
             textured: true,
             emissive: false,
@@ -1444,16 +1458,14 @@ impl Game {
             return;
         }
         let meta = self.world.get_meta(x, y, z);
-        // particles
+        // particles: a 4x4x4 burst of chips flying outward from the centre (as in vanilla)
         for i in 0..4 {
             for j in 0..4 {
                 for k in 0..4 {
-                    if self.rng.chance(0.5) {
-                        continue;
-                    }
-                    let p = v3(x as f32 + (i as f32 + 0.5) / 4.0, y as f32 + (j as f32 + 0.5) / 4.0, z as f32 + (k as f32 + 0.5) / 4.0);
-                    let v = v3((i as f32 - 1.5) * 0.04, (j as f32 - 1.0) * 0.04 + 0.05, (k as f32 - 1.5) * 0.04);
-                    self.block_particle(b, p, v);
+                    let d = v3((i as f32 + 0.5) / 4.0, (j as f32 + 0.5) / 4.0, (k as f32 + 0.5) / 4.0);
+                    let p = v3(x as f32, y as f32, z as f32) + d;
+                    let v = self.particle_velocity(d - v3(0.5, 0.5, 0.5));
+                    self.block_particle(b, p, v, 1.0);
                 }
             }
         }
@@ -1721,11 +1733,13 @@ impl Game {
                         self.sound("eat", None, 0.5);
                         // food particles
                         let p = self.player.eye() + self.player.look_dir() * 0.5 - v3(0.0, 0.2, 0.0);
-                        if let Some(_t) = item::texture(held.id) {
-                            let c = [200, 150, 100, 255];
-                            for _ in 0..2 {
+                        if item::texture(held.id).is_some() {
+                            // crumbs: small chips of the food's own sprite (as in vanilla)
+                            for _ in 0..3 {
                                 let v = v3(self.rng.uniform(-0.05, 0.05), 0.1, self.rng.uniform(-0.05, 0.05));
-                                self.particles.push(Particle { pos: p, prev_pos: p, vel: v, age: 0, life: 15, size: 0.05, uv: [0.0; 4], color: c, gravity: 0.04, textured: false, emissive: false });
+                                let (su, sv) = (self.rng.range(12) as f32 / 16.0, self.rng.range(12) as f32 / 16.0);
+                                let size = 0.04 + self.rng.next_f32() * 0.03;
+                                self.particles.push(Particle { pos: p, prev_pos: p, vel: v, age: 0, life: 15, size, uv: [held.id as f32, su, sv, 1.0], color: [255; 4], gravity: 0.04, textured: true, emissive: false });
                             }
                         }
                     }

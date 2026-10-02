@@ -427,6 +427,7 @@ fn run_script(g: &mut Game, win: &mut Window, script: &str, t: f32) {
             }
             Some("slot") => g.player.inv.selected = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0),
             Some("hurt") => g.damage_player(parts.next().and_then(|s| s.parse().ok()).unwrap_or(1.0), None),
+            Some("food") => g.player.food = parts.next().and_then(|s| s.parse().ok()).unwrap_or(20),
             _ => {}
         }
     }

@@ -665,6 +665,7 @@ impl Scene {
         let fwd = v3(-yr.sin() * pr.cos(), -pr.sin(), yr.cos() * pr.cos());
         let up = right.cross(fwd).norm() * -1.0;
         let mut tex_v = Vec::new();
+        let mut item_v = Vec::new();
         let mut flat_v = Vec::new();
         let mut glow_v = Vec::new();
         for p in &g.particles {
@@ -672,7 +673,7 @@ impl Scene {
             let (sky, blk) = Self::light_at(&g.world, p.pos);
             let s = p.size * if p.textured { 1.0 } else { 1.0 - (p.age as f32 / p.life as f32) * 0.6 };
             let (a, b) = (right * s, up * s);
-            let uv = if p.textured { particle_uv(r, p) } else { [0.5, 0.5, 0.5, 0.5] };
+            let (uv, item_atlas) = if p.textured { particle_uv(r, p) } else { ([0.5, 0.5, 0.5, 0.5], false) };
             let c = p.color;
             let mk = |q: Vec3, u: f32, v: f32| Vertex { pos: [q.x, q.y, q.z], uv: [u, v], color: c, light: [sky, blk, 255, 0] };
             let q = [
@@ -681,13 +682,15 @@ impl Scene {
                 mk(pos + a + b, uv[2], uv[1]),
                 mk(pos - a + b, uv[0], uv[1]),
             ];
-            let list = if p.textured { &mut tex_v } else if p.emissive { &mut glow_v } else { &mut flat_v };
+            let list = if item_atlas { &mut item_v } else if p.textured { &mut tex_v } else if p.emissive { &mut glow_v } else { &mut flat_v };
             list.extend_from_slice(&[q[0], q[1], q[2], q[0], q[2], q[3]]);
         }
         r.setup_world_shader(mvp, fog, fog_range, skydark);
         unsafe { gl::glDisable(gl::CULL_FACE) };
         r.block_atlas.bind();
         r.draw_stream(&tex_v);
+        r.item_atlas.bind();
+        r.draw_stream(&item_v);
         r.white.bind();
         r.draw_stream(&flat_v);
         r.world_shader.set_f("u_fixed_light", 1.0);
@@ -1017,14 +1020,31 @@ impl Scene {
     }
 }
 
-fn particle_uv(r: &Renderer, p: &Particle) -> [f32; 4] {
-    let b = p.uv[0] as usize;
-    let tile = r.tiles.blocks.get(b).map(|t| t[2]).unwrap_or(0);
-    let tile = if b == GRASS as usize { r.tiles.blocks[DIRT as usize][2] } else { tile };
-    let (u0, v0, s) = r.tiles.uv(tile);
+/// UV rect of a textured particle's 4x4-pixel chip, and whether it lives in
+/// the item atlas. `uv` encodes (block or item id, chip u, chip v, is_item).
+fn particle_uv(r: &Renderer, p: &Particle) -> ([f32; 4], bool) {
+    let id = p.uv[0] as usize;
+    let (u0, v0, s, item_atlas) = if p.uv[3] > 0.5 {
+        match item::texture(id as ItemId) {
+            Some(t) if t.starts_with("b:") => {
+                let (u, v, s) = r.tiles.uv(*r.block_tile.get(&t[2..]).unwrap_or(&0));
+                (u, v, s, false)
+            }
+            Some(t) => {
+                let (u, v, s) = r.tiles_uv_items(*r.item_tile.get(t).unwrap_or(&0));
+                (u, v, s, true)
+            }
+            None => (0.0, 0.0, 0.0, false),
+        }
+    } else {
+        let tile = r.tiles.blocks.get(id).map(|t| t[2]).unwrap_or(0);
+        let tile = if id == GRASS as usize { r.tiles.blocks[DIRT as usize][2] } else { tile };
+        let (u, v, s) = r.tiles.uv(tile);
+        (u, v, s, false)
+    };
     let su = u0 + p.uv[1] * s;
     let sv = v0 + p.uv[2] * s;
-    [su, sv, su + s * 0.25, sv + s * 0.25]
+    ([su, sv, su + s * 0.25, sv + s * 0.25], item_atlas)
 }
 
 fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {

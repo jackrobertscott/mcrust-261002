@@ -639,14 +639,42 @@ impl Particle {
             return false;
         }
         self.vel.y -= self.gravity;
-        let np = self.pos + self.vel;
-        let (x, y, z) = np.floor();
-        if block::is_solid(world.get(x, y, z)) {
-            self.vel = v3(self.vel.x * 0.5, 0.0, self.vel.z * 0.5);
+        // move one axis at a time against the particle's own extent, so chips
+        // land and rest on top of surfaces instead of sinking into them
+        let h = self.size.min(0.1);
+        let solid = |p: Vec3| {
+            let (x, y, z) = p.floor();
+            block::is_solid(world.get(x, y, z))
+        };
+        let mut on_ground = false;
+        let ny = self.pos.y + self.vel.y;
+        let edge = ny + if self.vel.y < 0.0 { -h } else { h };
+        if solid(v3(self.pos.x, edge, self.pos.z)) {
+            if self.vel.y < 0.0 {
+                on_ground = true;
+                self.pos.y = edge.floor() + 1.0 + h;
+            }
+            self.vel.y = 0.0;
         } else {
-            self.pos = np;
+            self.pos.y = ny;
+        }
+        let nx = self.pos.x + self.vel.x;
+        if solid(v3(nx + h * self.vel.x.signum(), self.pos.y, self.pos.z)) {
+            self.vel.x = 0.0;
+        } else {
+            self.pos.x = nx;
+        }
+        let nz = self.pos.z + self.vel.z;
+        if solid(v3(self.pos.x, self.pos.y, nz + h * self.vel.z.signum())) {
+            self.vel.z = 0.0;
+        } else {
+            self.pos.z = nz;
         }
         self.vel = self.vel * 0.98;
+        if on_ground {
+            self.vel.x *= 0.7;
+            self.vel.z *= 0.7;
+        }
         true
     }
 }

@@ -1850,54 +1850,99 @@ fn wheat(stage: u32) -> Image {
 // ---------------------------------------------------------------------------
 // destroy stages
 
-fn crack_order() -> Vec<(i32, i32)> {
+/// Grow a branching crack network outward from near the centre. Returns, per
+/// pixel, the growth step at which it cracked (u32::MAX = never), so each
+/// destroy stage can show everything that has cracked "so far".
+fn crack_network() -> [[u32; 16]; 16] {
     let mut r = Rng::new(9001);
-    let mut seen = [[false; 16]; 16];
-    let mut out = Vec::new();
-    let mut tips: Vec<(i32, i32, i32, i32)> = vec![(7, 8, 1, -1), (8, 7, -1, 1), (7, 7, -1, -1), (8, 8, 1, 1)];
-    for &(x, y, _, _) in &tips {
-        seen[y as usize][x as usize] = true;
-        out.push((x, y));
+    let mut birth = [[u32::MAX; 16]; 16];
+    // which crack made each pixel, and each crack's parent (forks may touch their parent)
+    let mut owner = [[usize::MAX; 16]; 16];
+    let mut parent: Vec<usize> = Vec::new();
+    // tips: position, heading (radians), remaining length, crack id
+    let mut tips: Vec<(f32, f32, f32, f32, usize)> = Vec::new();
+    let a0 = r.f() * std::f32::consts::TAU;
+    for k in 0..4 {
+        let a = a0 + k as f32 * std::f32::consts::FRAC_PI_2 + (r.f() - 0.5) * 0.8;
+        tips.push((7.5, 7.5, a, 13.0 + r.f() * 5.0, k));
+        parent.push(k);
     }
-    let mut iter = 0;
-    while out.len() < 150 && !tips.is_empty() && iter < 5000 {
-        iter += 1;
-        let i = r.range(tips.len() as u32) as usize;
-        let (x, y, dx, dy) = tips[i];
-        let roll = r.range(4);
-        let (sx, sy) = match roll {
-            0 | 1 => (dx, dy),
-            2 => (dx, if dx == 0 { dy } else { 0 }),
-            _ => (if dy == 0 { dx } else { 0 }, dy),
-        };
-        let (nx, ny) = (x + sx, y + sy);
-        if !(0..16).contains(&nx) || !(0..16).contains(&ny) {
-            tips.remove(i);
-            continue;
+    birth[7][7] = 0;
+    let mut step = 1;
+    while !tips.is_empty() && step < 64 {
+        let mut next = Vec::new();
+        for (x, y, a, len, id) in tips {
+            let a = a + (r.f() - 0.5) * 0.7;
+            let (nx, ny) = (x + a.cos(), y + a.sin());
+            let (px, py) = (nx.floor() as i32, ny.floor() as i32);
+            if !(0..16).contains(&px) || !(0..16).contains(&py) || len <= 0.0 {
+                continue;
+            }
+            if birth[py as usize][px as usize] != u32::MAX {
+                next.push((nx, ny, a, len - 1.0, id));
+                continue;
+            }
+            birth[py as usize][px as usize] = step;
+            owner[py as usize][px as usize] = id;
+            // running alongside another crack: join it rather than run parallel
+            let other = [(0, 1), (0, -1), (1, 0), (-1, 0)].iter().any(|&(dx, dy)| {
+                let (qx, qy) = (px + dx, py + dy);
+                if !(0..16).contains(&qx) || !(0..16).contains(&qy) {
+                    return false;
+                }
+                let o = owner[qy as usize][qx as usize];
+                o != usize::MAX && o != id && o != parent[id] && parent[o] != id
+            });
+            if other && step > 3 && r.f() < 0.8 {
+                continue;
+            }
+            next.push((nx, ny, a, len - 1.0, id));
+            // fork off a thinner side crack now and then
+            if r.f() < 0.17 && next.len() < 20 {
+                let side = if r.f() < 0.5 { -1.0 } else { 1.0 };
+                parent.push(id);
+                next.push((nx, ny, a + side * (0.7 + r.f() * 0.6), len * 0.6, parent.len() - 1));
+            }
         }
-        if !seen[ny as usize][nx as usize] {
-            seen[ny as usize][nx as usize] = true;
-            out.push((nx, ny));
-        }
-        tips[i] = (nx, ny, dx, dy);
-        if r.range(9) == 0 && tips.len() < 12 {
-            // branch with rotated direction
-            let (bx, by) = if r.range(2) == 0 { (dx, -dy) } else { (-dx, dy) };
-            let (bx, by) = if bx == 0 && by == 0 { (1, 0) } else { (bx, by) };
-            tips.push((nx, ny, bx, by));
-        }
+        tips = next;
+        step += 1;
     }
-    out
+    birth
 }
 
+/// Vanilla-style destroy stage: drawn with a 2x multiplicative blend, so grey
+/// 128 leaves the block unchanged, darker greys carve the crack and lighter
+/// greys catch the light on the crack's lower lip.
 fn destroy(stage: usize) -> Image {
-    let order = crack_order();
-    let counts = [6, 12, 20, 30, 42, 55, 70, 88, 108, 130];
-    let n = counts[stage].min(order.len());
+    let birth = crack_network();
+    let max = birth.iter().flatten().copied().filter(|&b| b != u32::MAX).max().unwrap_or(1);
+    let frac = [0.08, 0.16, 0.24, 0.33, 0.42, 0.52, 0.62, 0.73, 0.85, 1.0][stage];
+    let cut = ((max as f32 * frac).round() as u32).max(1);
+    let cracked = |x: i32, y: i32| (0..16).contains(&x) && (0..16).contains(&y) && birth[y as usize][x as usize] <= cut;
     let mut img = Image::new(16, 16);
-    for (k, &(x, y)) in order[..n].iter().enumerate() {
-        let a = if k % 5 == 3 { 150 } else { 215 };
-        img.put(x, y, [0x18, 0x18, 0x18, a]);
+    let mut r = Rng::new(77 + stage as u64);
+    // late stages: chipped, crumbling surface around the cracks
+    if stage >= 4 {
+        for y in 0..16 {
+            for x in 0..16 {
+                let near = (-1..=1).any(|dy| (-1..=1).any(|dx| cracked(x + dx, y + dy)));
+                if near && !cracked(x, y) && r.f() < 0.06 * (stage as f32 - 3.0) {
+                    img.put(x, y, gray(0x62));
+                }
+            }
+        }
+    }
+    for y in 0..16 {
+        for x in 0..16 {
+            if cracked(x, y) {
+                // older (wider) parts of the crack are deeper
+                let age = cut - birth[y as usize][x as usize];
+                let v = if age > 6 { 0x26 } else if age > 2 { 0x34 } else { 0x48 };
+                img.put(x, y, gray(v));
+            } else if cracked(x, y - 1) && img.get(x as usize, y as usize)[3] == 0 {
+                img.put(x, y, gray(0x9C));
+            }
+        }
     }
     img
 }
